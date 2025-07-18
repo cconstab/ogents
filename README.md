@@ -2,14 +2,16 @@
 
 An AI agent with an atSign that automatically processes file notifications and provides summaries using LLM services via the atPlatform.
 
-## Features
+## 📋 Features
 
-- **File Reception**: Receives file notifications via atPlatform notifications
-- **Automatic Download**: Downloads files from various sources (URLs, base64 data, atPlatform file transfer)
-- **Content Extraction**: Extracts text content from multiple file formats (txt, md, json, xml, csv, archives, etc.)
-- **LLM Integration**: Sends extracted content to LLM services for summarization
-- **Secure Communication**: All communication happens via end-to-end encrypted atSign messaging
-- **Flexible Architecture**: Supports multiple LLM backends (simple rule-based, Ollama, etc.)
+- **🔔 Notification-Based**: Triggers automatically when files are sent via atPlatform
+- **📁 Multi-Format Support**: Handles text files, documents, archives, PDFs, and images
+- **🧠 AI Summarization**: Integrates with LLM services (Ollama) for intelligent content analysis
+- **🔒 Secure**: End-to-end encryption via atSign messaging
+- **🌐 URL Support**: Can process files from URLs as well as local files
+- **�️ OCR Capabilities**: Extracts text from PDFs and images using Tesseract OCR
+- **📊 Archive Support**: Automatically extracts and processes ZIP/TAR archives
+- **⚡ Real-time**: Instant processing and response via atPlatform notifications
 
 ## Architecture
 
@@ -26,6 +28,23 @@ The system consists of three main components:
 - Dart SDK 3.8.1 or higher
 - Active atSign (get one from [my.atsign.com](https://my.atsign.com))
 - atSign keys properly configured
+- **Rust toolchain** (required for PDF OCR functionality)
+
+### Installing Rust for OCR Support
+
+The PDF OCR functionality requires Rust. Install it using the provided script:
+
+```bash
+# Install Rust toolchain
+./install_rust.sh
+
+# Reload environment variables
+source ~/.cargo/env
+
+# Verify installation
+rustc --version
+cargo --version
+```
 
 ### Building from Source
 
@@ -99,6 +118,24 @@ The process will:
 4. LLM service returns a summary
 5. Agent sends the summary back to you
 
+## 🔧 Advanced Features
+
+### OCR Capabilities ✅
+The system now includes full OCR (Optical Character Recognition) functionality using Tesseract:
+- **PDF Text Extraction**: Extracts text from scanned PDFs
+- **Image Text Recognition**: Processes JPG, PNG, BMP, TIFF, and GIF images
+- **Multi-language Support**: Configurable language detection (default: English)
+- **Automatic Fallback**: Falls back to basic analysis if OCR fails
+
+**Prerequisites**: Tesseract must be installed on your system:
+```bash
+# macOS
+brew install tesseract
+
+# Verify installation
+tesseract --version
+```
+
 ### Example Workflow
 
 1. **Start LLM Service**:
@@ -123,9 +160,39 @@ The process will:
 The agent can process various file formats:
 
 - **Text Files**: `.txt`, `.md`, `.log`, `.csv`, `.json`, `.xml`, `.yaml`
+- **PDF Documents**: `.pdf` (with advanced OCR text extraction)
 - **Archives**: `.zip`, `.tar`, `.gz` (extracts and processes text files within)
 - **Binary Files**: Basic analysis and metadata extraction
 - **Large Files**: Automatic content truncation to prevent overwhelming the LLM
+
+### PDF Processing with Analysis
+
+The system includes comprehensive PDF support with:
+- **PDF Detection**: Validates PDF file format and structure
+- **Metadata Extraction**: File size, basic document information
+- **Content Analysis**: Identifies document characteristics
+- **OCR Framework**: Ready for OCR integration (see OCR_SETUP.md)
+
+**Current PDF Features:**
+- Native PDF format validation
+- File structure analysis and metadata extraction
+- Graceful handling of different PDF types
+- Detailed processing feedback and status reporting
+- Foundation for advanced OCR capabilities
+
+**Testing PDF Processing:**
+```bash
+# Create a test document
+dart create_test_pdf.dart
+
+# Test PDF processing
+dart test_pdf_processing.dart your_file.pdf
+
+# Full OCR setup (optional)
+# See OCR_SETUP.md for detailed instructions
+```
+
+**Current Implementation**: PDF files are detected and analyzed, providing detailed information about the document structure and processing recommendations.
 
 ## LLM Backend Options
 

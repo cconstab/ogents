@@ -260,7 +260,15 @@ class FileAgent {
         return 'Unable to extract text content from this file type.';
       }
 
-      // Send to LLM for summarization
+      // Check if content was extracted via OCR - if so, return it directly
+      if (content.contains('**PDF Text Content (Extracted with') ||
+          content.contains('**Image File Processed**') ||
+          content.startsWith('📄 **PDF Text Content')) {
+        // This is already formatted OCR content, return it as-is
+        return content;
+      }
+
+      // For other content types, send to LLM for summarization
       final prompt =
           'Please provide a concise summary of the following file content:\n\n$content';
       return await llmClient.sendToLLM(prompt, fromAtSign);

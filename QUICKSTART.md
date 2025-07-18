@@ -6,7 +6,8 @@ This guide will help you get ogents up and running quickly for file processing a
 
 1. **Dart SDK 3.8.1+**: Install from [dart.dev](https://dart.dev/get-dart)
 2. **atSign**: Get a free atSign from [my.atsign.com](https://my.atsign.com)
-3. **Optional**: Ollama for advanced LLM capabilities
+3. **Tesseract OCR**: For PDF/image text extraction: `brew install tesseract`
+4. **Optional**: Ollama for advanced LLM capabilities
 
 ## Quick Setup
 

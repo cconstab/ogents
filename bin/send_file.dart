@@ -287,9 +287,9 @@ Future<void> listenForSummary(AtClient atClient, String nameSpace) async {
             print(chalk.green('\\n📋 Summary received from $agent:'));
             print(chalk.blue('File: $filename'));
             print(chalk.blue('Time: $timestamp'));
-            print(chalk.white('\\n--- SUMMARY ---'));
+            print(chalk.white('\n--- SUMMARY ---'));
             print(chalk.yellow(summary));
-            print(chalk.white('--- END SUMMARY ---\\n'));
+            print(chalk.white('--- END SUMMARY ---\n'));
 
             if (!completer.isCompleted) {
               completer.complete();
