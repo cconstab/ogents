@@ -24,26 +24,26 @@ class FileAgent {
   static const String defaultNameSpace = 'ogents';
   static const String fileShareKey = 'file_share';
   static const String summaryKey = 'file_summary';
-  
+
   late AtClient atClient;
   late String currentAtSign;
   late String llmAtSign;
   late String nameSpace;
   late FileProcessor fileProcessor;
   late LLMClient llmClient;
-  
+
   final logger = AtSignLogger('FileAgent');
-  
+
   Future<void> run(List<String> args) async {
     // Setup logging
     AtSignLogger.defaultLoggingHandler = AtSignLogger.stdErrLoggingHandler;
     logger.hierarchicalLoggingEnabled = true;
     logger.logger.level = Level.INFO;
-    
+
     // Parse command line arguments
     final parser = _createArgumentParser();
     ArgResults parsedArgs;
-    
+
     try {
       parsedArgs = parser.parse(args);
     } catch (e) {
@@ -51,78 +51,79 @@ class FileAgent {
       print(parser.usage);
       exit(1);
     }
-    
+
     if (parsedArgs['help']) {
       print(parser.usage);
       exit(0);
     }
-    
+
     // Extract configuration
     currentAtSign = parsedArgs['atsign'];
     llmAtSign = parsedArgs['llm-atsign'];
     nameSpace = '${parsedArgs['namespace']}.${defaultNameSpace}';
-    
+
     print(chalk.blue('Starting ogents file agent...'));
     print(chalk.blue('Agent atSign: $currentAtSign'));
     print(chalk.blue('LLM atSign: $llmAtSign'));
     print(chalk.blue('Namespace: $nameSpace'));
-    
+
     // Initialize atClient
     await _initializeAtClient(parsedArgs);
-    
+
     // Initialize processors
     fileProcessor = FileProcessor(
       atClient: atClient,
       nameSpace: nameSpace,
       downloadPath: parsedArgs['download-path'] ?? './downloads',
     );
-    
+
     llmClient = LLMClient(
       atClient: atClient,
       nameSpace: nameSpace,
       llmAtSign: llmAtSign,
     );
-    
+
     // Start listening for file notifications
     await _startFileNotificationListener();
-    
-    print(chalk.green('✅ File agent is now running and listening for file notifications...'));
-    print(chalk.yellow('Send files to $currentAtSign using the key pattern: "$fileShareKey"'));
+
+    print(
+      chalk.green(
+        '✅ File agent is now running and listening for file notifications...',
+      ),
+    );
+    print(
+      chalk.yellow(
+        'Send files to $currentAtSign using the key pattern: "$fileShareKey"',
+      ),
+    );
     print(chalk.gray('Press Ctrl+C to stop'));
-    
+
     // Keep the program running
     while (true) {
       await Future.delayed(Duration(seconds: 1));
     }
   }
-  
+
   ArgParser _createArgumentParser() {
     final parser = CLIBase.argsParser;
-    
+
     parser.addOption(
       'llm-atsign',
       abbr: 'l',
       mandatory: true,
       help: 'atSign of the LLM service to send files for summarization',
     );
-    
+
     parser.addOption(
       'download-path',
-      abbr: 'd',
+      abbr: 'p', // Changed from 'd' to 'p' to avoid conflict with root-domain
       help: 'Directory to download files to',
       defaultsTo: './downloads',
     );
-    
-    parser.addFlag(
-      'help',
-      abbr: 'h',
-      help: 'Show this help message',
-      negatable: false,
-    );
-    
+
     return parser;
   }
-  
+
   Future<void> _initializeAtClient(ArgResults parsedArgs) async {
     try {
       final cli = CLIBase(
@@ -131,7 +132,8 @@ class FileAgent {
         nameSpace: parsedArgs['namespace'],
         rootDomain: parsedArgs['root-domain'],
         homeDir: getHomeDirectory(),
-        storageDir: parsedArgs['storage-dir'] ??
+        storageDir:
+            parsedArgs['storage-dir'] ??
             standardAtClientStoragePath(
               baseDir: getHomeDirectory()!,
               atSign: parsedArgs['atsign'],
@@ -142,24 +144,24 @@ class FileAgent {
         syncDisabled: parsedArgs['never-sync'],
         maxConnectAttempts: int.parse(parsedArgs['max-connect-attempts']),
       );
-      
+
       await cli.init();
       atClient = cli.atClient;
       currentAtSign = cli.atSign;
-      
+
       print(chalk.green('✅ Connected to atServer'));
     } catch (e) {
       print(chalk.red('❌ Failed to initialize atClient: $e'));
       exit(1);
     }
   }
-  
+
   Future<void> _startFileNotificationListener() async {
     // Subscribe to file share notifications
     final regex = '$fileShareKey\\.$nameSpace@';
-    
+
     print(chalk.blue('🔍 Listening for notifications matching: $regex'));
-    
+
     atClient.notificationService
         .subscribe(regex: regex, shouldDecrypt: true)
         .listen(
@@ -174,59 +176,74 @@ class FileAgent {
           },
         );
   }
-  
+
   Future<void> _handleFileNotification(AtNotification notification) async {
     try {
-      print(chalk.cyan('📨 Received file notification from ${notification.from}'));
-      logger.info('File notification received from ${notification.from}, ID: ${notification.id}');
-      
+      print(
+        chalk.cyan('📨 Received file notification from ${notification.from}'),
+      );
+      logger.info(
+        'File notification received from ${notification.from}, ID: ${notification.id}',
+      );
+
       // Parse the file information from notification value
       final fileInfo = _parseFileInfo(notification.value);
       if (fileInfo == null) {
         print(chalk.red('❌ Invalid file information in notification'));
         return;
       }
-      
-      print(chalk.blue('📄 File: ${fileInfo['filename']}, Size: ${fileInfo['size']} bytes'));
-      
+
+      print(
+        chalk.blue(
+          '📄 File: ${fileInfo['filename']}, Size: ${fileInfo['size']} bytes',
+        ),
+      );
+
       // Download the file
       print(chalk.yellow('⬇️ Downloading file...'));
       final downloadedFile = await fileProcessor.downloadFile(
         notification.from,
         fileInfo,
       );
-      
+
       if (downloadedFile == null) {
         print(chalk.red('❌ Failed to download file'));
         return;
       }
-      
+
       print(chalk.green('✅ File downloaded: ${downloadedFile.path}'));
-      
+
       // Process the file and get summary
       print(chalk.yellow('🤖 Sending file to LLM for summarization...'));
       final summary = await _summarizeFile(downloadedFile, notification.from);
-      
+
       if (summary != null) {
         print(chalk.green('✅ File summarized successfully'));
-        print(chalk.gray('Summary: ${summary.substring(0, summary.length > 100 ? 100 : summary.length)}...'));
-        
+        print(
+          chalk.gray(
+            'Summary: ${summary.substring(0, summary.length > 100 ? 100 : summary.length)}...',
+          ),
+        );
+
         // Send summary back to sender
-        await _sendSummaryNotification(notification.from, summary, fileInfo['filename']);
+        await _sendSummaryNotification(
+          notification.from,
+          summary,
+          fileInfo['filename'],
+        );
         print(chalk.green('✅ Summary sent back to ${notification.from}'));
       } else {
         print(chalk.red('❌ Failed to get summary from LLM'));
       }
-      
     } catch (e, stackTrace) {
       logger.severe('Error handling file notification: $e', e, stackTrace);
       print(chalk.red('❌ Error processing file notification: $e'));
     }
   }
-  
+
   Map<String, dynamic>? _parseFileInfo(String? value) {
     if (value == null || value.isEmpty) return null;
-    
+
     try {
       return jsonDecode(value) as Map<String, dynamic>;
     } catch (e) {
@@ -234,7 +251,7 @@ class FileAgent {
       return null;
     }
   }
-  
+
   Future<String?> _summarizeFile(File file, String fromAtSign) async {
     try {
       // Read file content
@@ -242,18 +259,22 @@ class FileAgent {
       if (content.isEmpty) {
         return 'Unable to extract text content from this file type.';
       }
-      
+
       // Send to LLM for summarization
-      final prompt = 'Please provide a concise summary of the following file content:\n\n$content';
+      final prompt =
+          'Please provide a concise summary of the following file content:\n\n$content';
       return await llmClient.sendToLLM(prompt, fromAtSign);
-      
     } catch (e) {
       logger.severe('Error summarizing file: $e');
       return null;
     }
   }
-  
-  Future<void> _sendSummaryNotification(String toAtSign, String summary, String filename) async {
+
+  Future<void> _sendSummaryNotification(
+    String toAtSign,
+    String summary,
+    String filename,
+  ) async {
     try {
       final summaryData = {
         'filename': filename,
@@ -261,7 +282,7 @@ class FileAgent {
         'timestamp': DateTime.now().toIso8601String(),
         'agent': currentAtSign,
       };
-      
+
       final key = AtKey()
         ..key = summaryKey
         ..sharedBy = currentAtSign
@@ -271,16 +292,16 @@ class FileAgent {
           ..isEncrypted = true
           ..isPublic = false
           ..namespaceAware = true);
-      
+
       final result = await atClient.notificationService.notify(
         NotificationParams.forUpdate(key, value: jsonEncode(summaryData)),
         checkForFinalDeliveryStatus: false,
       );
-      
+
       if (result.atClientException != null) {
         throw result.atClientException!;
       }
-      
+
       logger.info('Summary notification sent to $toAtSign');
     } catch (e) {
       logger.severe('Failed to send summary notification: $e');

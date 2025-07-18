@@ -80,15 +80,21 @@ Send files to @agent_atsign using the key pattern: "file_share"
 
 ### Sending Files for Processing
 
-Use the `send_file` utility to send files to the agent:
+Use the `send_file` utility to send files or URLs to the agent:
 
+**Send a local file:**
 ```bash
 ./send_file -a @your_atsign -g @agent_atsign -f /path/to/your/file.txt -n ogents
 ```
 
+**Send a URL:**
+```bash
+./send_file -a @your_atsign -g @agent_atsign -u https://example.com/document.pdf -n ogents
+```
+
 The process will:
-1. Send the file to the agent
-2. Agent downloads and processes the file  
+1. Send the file or URL to the agent
+2. Agent downloads and processes the file (from local path or URL)
 3. Agent sends the file content to the LLM service
 4. LLM service returns a summary
 5. Agent sends the summary back to you
@@ -157,7 +163,7 @@ abstract class LLMProcessor {
 - `-a, --atsign`: Your atSign
 - `-l, --llm-atsign`: atSign of the LLM service
 - `-n, --namespace`: Namespace (default: ogents)
-- `-d, --download-path`: Directory for downloads (default: ./downloads)
+- `-p, --download-path`: Directory for downloads (default: ./downloads)
 
 #### LLM Service (`llm_service`)
 - `-a, --atsign`: LLM service atSign
@@ -169,7 +175,8 @@ abstract class LLMProcessor {
 #### File Sender (`send_file`)
 - `-a, --atsign`: Your atSign
 - `-g, --agent`: Agent atSign
-- `-f, --file`: File path to send
+- `-f, --file`: Local file path to send (use either this or --url)
+- `-u, --url`: URL of file to send (use either this or --file)
 - `-n, --namespace`: Namespace
 
 ### Environment Variables

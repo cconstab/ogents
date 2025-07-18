@@ -20,7 +20,7 @@ void main() {
       // Create a temporary test file
       final testFile = File('./test_file.txt');
       await testFile.writeAsString('This is a test file content for ogents.');
-      
+
       try {
         final processor = FileProcessor(
           atClient: null as dynamic, // Mock for testing

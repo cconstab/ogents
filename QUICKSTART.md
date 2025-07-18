@@ -44,7 +44,11 @@ Follow the prompts to complete activation.
 
 **Terminal 3 - Send a File:**
 ```bash
+# Send a local file
 ./send_file -a @your_atsign -g @file_agent -f examples/sample_document.md -n ogents
+
+# Or send a URL
+./send_file -a @your_atsign -g @file_agent -u https://raw.githubusercontent.com/example/repo/main/README.md -n ogents
 ```
 
 ## Expected Output
@@ -83,7 +87,7 @@ ollama serve
 ### Custom Download Directory
 
 ```bash
-./ogents -a @file_agent -l @llm_service -n ogents -d /custom/download/path
+./ogents -a @file_agent -l @llm_service -n ogents -p /custom/download/path
 ```
 
 ## File Format Support
