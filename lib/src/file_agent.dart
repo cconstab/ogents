@@ -260,11 +260,18 @@ class FileAgent {
         return 'Unable to extract text content from this file type.';
       }
 
-      // Check if content was extracted via OCR - if so, return it directly
+      // Check if content was extracted via OCR
       if (content.contains('**PDF Text Content (Extracted with') ||
           content.contains('**Image File Processed**') ||
           content.startsWith('📄 **PDF Text Content')) {
-        // This is already formatted OCR content, return it as-is
+        
+        // For multi-page PDFs, send to LLM for summarization
+        if (content.contains('Pages') && content.contains('--- Page ')) {
+          final prompt = 'Please provide a comprehensive summary of this multi-page PDF content. Include key information from all pages:\n\n$content';
+          return await llmClient.sendToLLM(prompt, fromAtSign);
+        }
+        
+        // For single-page or image OCR content, return directly
         return content;
       }
 
