@@ -377,7 +377,9 @@ class FileProcessor {
       final pagesToProcess = pageCount > maxPages ? maxPages : pageCount;
 
       if (pageCount > maxPages) {
-        logger.info('PDF has $pageCount pages, processing first $maxPages pages only');
+        logger.info(
+          'PDF has $pageCount pages, processing first $maxPages pages only',
+        );
       }
 
       final allOcrResults = <String>[];
@@ -397,7 +399,9 @@ class FileProcessor {
 
         // If magick fails, try with convert command
         if (convertResult.exitCode != 0) {
-          logger.info('Magick command failed for page ${pageNum + 1}, trying convert command...');
+          logger.info(
+            'Magick command failed for page ${pageNum + 1}, trying convert command...',
+          );
           convertResult = await Process.run('convert', [
             file.path + '[$pageNum]', // Specific page
             '-density', '300', // High DPI for better OCR
@@ -408,8 +412,11 @@ class FileProcessor {
 
         // If both ImageMagick commands fail, try Ghostscript for this page
         if (convertResult.exitCode != 0) {
-          logger.info('ImageMagick conversion failed for page ${pageNum + 1}, trying Ghostscript...');
-          final gsPageNum = pageNum + 1; // Ghostscript uses 1-based page numbers
+          logger.info(
+            'ImageMagick conversion failed for page ${pageNum + 1}, trying Ghostscript...',
+          );
+          final gsPageNum =
+              pageNum + 1; // Ghostscript uses 1-based page numbers
           convertResult = await Process.run('gs', [
             '-dNOPAUSE',
             '-dBATCH',
@@ -423,7 +430,9 @@ class FileProcessor {
         }
 
         if (convertResult.exitCode != 0) {
-          logger.warning('Failed to convert page ${pageNum + 1}: ${convertResult.stderr}');
+          logger.warning(
+            'Failed to convert page ${pageNum + 1}: ${convertResult.stderr}',
+          );
           continue; // Skip this page and try the next one
         }
 
@@ -434,13 +443,17 @@ class FileProcessor {
           continue;
         }
 
-        logger.info('Page ${pageNum + 1} image created successfully, size: ${imageFile.lengthSync()} bytes');
+        logger.info(
+          'Page ${pageNum + 1} image created successfully, size: ${imageFile.lengthSync()} bytes',
+        );
 
         // Run OCR on the converted image
         final pageOcrResult = await _extractTextWithTesseract(imageFile);
-        
+
         if (pageOcrResult.trim().isNotEmpty) {
-          logger.info('OCR successful for page ${pageNum + 1}, extracted ${pageOcrResult.length} characters');
+          logger.info(
+            'OCR successful for page ${pageNum + 1}, extracted ${pageOcrResult.length} characters',
+          );
           allOcrResults.add('--- Page ${pageNum + 1} ---\n$pageOcrResult');
         } else {
           logger.info('No text found on page ${pageNum + 1}');
@@ -449,7 +462,9 @@ class FileProcessor {
 
       // Combine all OCR results
       final combinedResult = allOcrResults.join('\n\n');
-      logger.info('Total OCR result length: ${combinedResult.length} characters from ${allOcrResults.length} pages');
+      logger.info(
+        'Total OCR result length: ${combinedResult.length} characters from ${allOcrResults.length} pages',
+      );
 
       return combinedResult;
     } catch (e) {
@@ -470,7 +485,9 @@ class FileProcessor {
 
   Future<String> _extractTextWithTesseract(File file) async {
     try {
-      logger.info('Attempting OCR text extraction using Tesseract CLI: ${file.path}');
+      logger.info(
+        'Attempting OCR text extraction using Tesseract CLI: ${file.path}',
+      );
 
       // Try OCR with simpler parameters first
       final result = await Process.run('tesseract', [
@@ -485,12 +502,16 @@ class FileProcessor {
           logger.info('Tesseract OCR successful for: ${file.path}');
           return extractedText.trim();
         } else {
-          logger.info('Tesseract OCR completed but no text found: ${file.path}');
+          logger.info(
+            'Tesseract OCR completed but no text found: ${file.path}',
+          );
           return '';
         }
       } else {
         final errorMessage = result.stderr as String;
-        logger.warning('Tesseract OCR failed with exit code ${result.exitCode}: $errorMessage');
+        logger.warning(
+          'Tesseract OCR failed with exit code ${result.exitCode}: $errorMessage',
+        );
 
         // Try with different PSM mode if the first attempt failed
         if (errorMessage.contains('PSM') || errorMessage.contains('OSD')) {
@@ -505,7 +526,9 @@ class FileProcessor {
           if (retryResult.exitCode == 0) {
             final retryText = retryResult.stdout as String;
             if (retryText.trim().isNotEmpty) {
-              logger.info('Tesseract OCR successful on retry for: ${file.path}');
+              logger.info(
+                'Tesseract OCR successful on retry for: ${file.path}',
+              );
               return retryText.trim();
             }
           }
@@ -522,17 +545,25 @@ class FileProcessor {
   String _formatOcrText(String rawText, String method) {
     // Clean up OCR text
     final cleanText = rawText
-        .replaceAll(RegExp(r'\n\s*\n\s*\n'), '\n\n') // Remove excessive line breaks
+        .replaceAll(
+          RegExp(r'\n\s*\n\s*\n'),
+          '\n\n',
+        ) // Remove excessive line breaks
         .replaceAll(RegExp(r'[ \t]+'), ' ') // Normalize spaces
-        .replaceAll(RegExp(r'^\s+', multiLine: true), '') // Remove leading whitespace
+        .replaceAll(
+          RegExp(r'^\s+', multiLine: true),
+          '',
+        ) // Remove leading whitespace
         .trim();
 
     // Check if this is multi-page content
     final isMultiPage = cleanText.contains('--- Page ');
-    final pageCount = isMultiPage ? 
-        RegExp(r'--- Page \d+ ---').allMatches(cleanText).length : 1;
+    final pageCount = isMultiPage
+        ? RegExp(r'--- Page \d+ ---').allMatches(cleanText).length
+        : 1;
 
-    final formattedText = '''📄 **PDF Text Content (Extracted with $method)**${isMultiPage ? ' - $pageCount Pages' : ''}
+    final formattedText =
+        '''📄 **PDF Text Content (Extracted with $method)**${isMultiPage ? ' - $pageCount Pages' : ''}
 
 $cleanText''';
 
@@ -556,7 +587,8 @@ $cleanText''';
       }
 
       // Create analysis result - OCR attempted but no text found
-      final analysisText = '''📄 **PDF Document Processed with OCR**
+      final analysisText =
+          '''📄 **PDF Document Processed with OCR**
 
 **File Information:**
 - File: ${path.basename(file.path)}
@@ -642,11 +674,16 @@ If this PDF should contain text content, try:
       final extractedText = await _extractTextWithTesseract(file);
 
       if (extractedText.trim().isNotEmpty) {
-        logger.info('Successfully extracted text with OCR from image: ${file.path}');
+        logger.info(
+          'Successfully extracted text with OCR from image: ${file.path}',
+        );
         return _formatOcrText(extractedText, 'Tesseract OCR');
       } else {
         logger.info('OCR completed but no text found in image: ${file.path}');
-        return _createImageAnalysisResult(file.path, 'Image processed - no text detected');
+        return _createImageAnalysisResult(
+          file.path,
+          'Image processed - no text detected',
+        );
       }
     } catch (e) {
       logger.severe('Error processing image with OCR: $e');
@@ -671,7 +708,8 @@ $message
   String _formatFileSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    if (bytes < 1024 * 1024 * 1024)
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
 
@@ -700,17 +738,21 @@ $message
       ]);
 
       if (identifyResult.exitCode == 0) {
-        final lines = identifyResult.stdout.toString().split('\n').where((line) => line.trim().isNotEmpty);
+        final lines = identifyResult.stdout
+            .toString()
+            .split('\n')
+            .where((line) => line.trim().isNotEmpty);
         return lines.length;
       }
 
       // If both fail, try convert identify
-      final convertIdentifyResult = await Process.run('identify', [
-        file.path,
-      ]);
+      final convertIdentifyResult = await Process.run('identify', [file.path]);
 
       if (convertIdentifyResult.exitCode == 0) {
-        final lines = convertIdentifyResult.stdout.toString().split('\n').where((line) => line.trim().isNotEmpty);
+        final lines = convertIdentifyResult.stdout
+            .toString()
+            .split('\n')
+            .where((line) => line.trim().isNotEmpty);
         return lines.length;
       }
 

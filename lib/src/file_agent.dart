@@ -264,13 +264,13 @@ class FileAgent {
       if (content.contains('**PDF Text Content (Extracted with') ||
           content.contains('**Image File Processed**') ||
           content.startsWith('📄 **PDF Text Content')) {
-        
         // For multi-page PDFs, send to LLM for summarization
         if (content.contains('Pages') && content.contains('--- Page ')) {
-          final prompt = 'Please provide a comprehensive summary of this multi-page PDF content. Include key information from all pages:\n\n$content';
+          final prompt =
+              'Please provide a comprehensive summary of this multi-page PDF content. Include key information from all pages:\n\n$content';
           return await llmClient.sendToLLM(prompt, fromAtSign);
         }
-        
+
         // For single-page or image OCR content, return directly
         return content;
       }
