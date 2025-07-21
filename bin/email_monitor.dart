@@ -427,6 +427,17 @@ class EmailMonitor {
 
             final data = part.decodeContentBinary();
             if (data != null) {
+              final fileSizeMB = data.length / (1024 * 1024);
+              print(chalk.gray('File size: ${fileSizeMB.toStringAsFixed(1)}MB'));
+              
+              // Check file size - atPlatform has ~10MB limit for notifications
+              const maxSizeBytes = 8 * 1024 * 1024; // 8MB to be safe
+              if (data.length > maxSizeBytes) {
+                print(chalk.red('❌ PDF attachment too large: ${fileSizeMB.toStringAsFixed(1)}MB (max: 8MB)'));
+                print(chalk.yellow('💡 Skipping this attachment - consider smaller PDFs'));
+                continue;
+              }
+              
               final base64Data = base64Encode(data);
               await _sendPDFToOgents(
                 base64Data,
@@ -446,7 +457,18 @@ class EmailMonitor {
   Future<void> _processFile(File file) async {
     try {
       final fileName = file.path.split('/').last;
-      print(chalk.yellow('📧 Processing PDF file: $fileName'));
+      final fileSize = await file.length();
+      final fileSizeMB = fileSize / (1024 * 1024);
+      
+      print(chalk.yellow('📧 Processing PDF file: $fileName (${fileSizeMB.toStringAsFixed(1)}MB)'));
+
+      // Check file size - atPlatform has ~10MB limit for notifications
+      const maxSizeBytes = 8 * 1024 * 1024; // 8MB to be safe
+      if (fileSize > maxSizeBytes) {
+        print(chalk.red('❌ File too large: ${fileSizeMB.toStringAsFixed(1)}MB (max: 8MB)'));
+        print(chalk.yellow('💡 Consider using smaller PDFs or implement file chunking'));
+        return;
+      }
 
       // Read file and encode as base64
       final bytes = await file.readAsBytes();
