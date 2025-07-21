@@ -25,5 +25,34 @@ doc/api/
 
 .flutter-plugins
 .flutter-plugins-dependencies
-.downloads
+
+# Project specific ignore patterns
+downloads/
+*.log
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# AtPlatform
+.atsign/
+at_credentials/
+
+# OCR temporary files
+*.processed.txt
+*.ocr.txt
+
+# Test artifacts
+test_output/
+temp_test_files/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Email monitoring temporary files
+email_temp/
+attachments_temp/
 

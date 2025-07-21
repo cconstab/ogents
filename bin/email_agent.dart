@@ -3,7 +3,7 @@ import 'dart:io';
 import 'dart:convert';
 
 import 'package:at_cli_commons/at_cli_commons.dart';
-import 'package:at_client/at_client.dart';
+import 'package:at_client/at_client.dart' hide StringBuffer;
 import 'package:at_utils/at_logger.dart';
 import 'package:logging/logging.dart';
 import 'package:chalkdart/chalk.dart';
@@ -203,7 +203,9 @@ class EmailMonitor {
     await _checkForNewEmails();
 
     // Keep the program running
-    print(chalk.green('✅ Email agent is now running and monitoring for PDFs...'));
+    print(
+      chalk.green('✅ Email agent is now running and monitoring for PDFs...'),
+    );
     print(chalk.gray('Press Ctrl+C to stop'));
 
     while (true) {
@@ -214,11 +216,11 @@ class EmailMonitor {
   Future<void> _checkForNewEmails() async {
     try {
       await _connectToIMAP();
-      
+
       final unseenMessages = await _getUnseenMessages();
       if (unseenMessages.isNotEmpty) {
         print(chalk.blue('📬 Found ${unseenMessages.length} new messages'));
-        
+
         for (final messageId in unseenMessages) {
           if (!processedMessageIds.contains(messageId)) {
             await _processMessage(messageId);
@@ -226,7 +228,7 @@ class EmailMonitor {
           }
         }
       }
-      
+
       await _disconnectFromIMAP();
     } catch (e) {
       logger.warning('Failed to check emails: $e');
@@ -245,18 +247,17 @@ class EmailMonitor {
         imapPort,
         timeout: Duration(seconds: 30),
       );
-      
+
       isConnected = true;
-      
+
       // Read server greeting
       await _readResponse();
-      
+
       // Login
       await _sendCommand('LOGIN $email $password');
-      
+
       // Select INBOX
       await _sendCommand('SELECT INBOX');
-      
     } catch (e) {
       await _disconnectFromIMAP();
       rethrow;
@@ -279,32 +280,32 @@ class EmailMonitor {
 
   Future<String> _sendCommand(String command) async {
     if (socket == null) throw Exception('Not connected to IMAP server');
-    
+
     final tag = 'A${DateTime.now().millisecondsSinceEpoch}';
     final fullCommand = '$tag $command\r\n';
-    
+
     socket!.write(fullCommand);
-    
+
     final response = await _readResponse();
-    
+
     if (!response.contains('$tag OK')) {
       throw Exception('IMAP command failed: $command. Response: $response');
     }
-    
+
     return response;
   }
 
   Future<String> _readResponse() async {
     if (socket == null) throw Exception('Not connected to IMAP server');
-    
+
     final buffer = StringBuffer();
     final completer = Completer<String>();
-    
+
     socket!.listen(
       (data) {
         final text = String.fromCharCodes(data);
         buffer.write(text);
-        
+
         // Check if we have a complete response
         if (text.contains('\r\n')) {
           completer.complete(buffer.toString());
@@ -316,79 +317,89 @@ class EmailMonitor {
         }
       },
     );
-    
+
     return completer.future.timeout(Duration(seconds: 30));
   }
 
   Future<List<String>> _getUnseenMessages() async {
     final response = await _sendCommand('SEARCH UNSEEN');
-    
+
     // Parse message IDs from SEARCH response
     final messageIds = <String>[];
     final lines = response.split('\r\n');
-    
+
     for (final line in lines) {
       if (line.startsWith('* SEARCH ')) {
         final ids = line.substring(9).trim().split(' ');
         messageIds.addAll(ids.where((id) => id.isNotEmpty));
       }
     }
-    
+
     return messageIds;
   }
 
   Future<void> _processMessage(String messageId) async {
     try {
       print(chalk.yellow('📧 Processing message $messageId...'));
-      
+
       // Fetch message headers and structure
-      final response = await _sendCommand('FETCH $messageId (ENVELOPE BODYSTRUCTURE)');
-      
+      final response = await _sendCommand(
+        'FETCH $messageId (ENVELOPE BODYSTRUCTURE)',
+      );
+
       // Check if message has attachments
       if (!response.toLowerCase().contains('application/pdf')) {
         return; // No PDF attachments
       }
-      
+
       print(chalk.blue('📎 Found PDF attachment in message $messageId'));
-      
+
       // Fetch the full message to extract attachments
       final fullMessage = await _sendCommand('FETCH $messageId (RFC822)');
-      
+
       // Extract PDF attachments and send to ogents
       await _extractAndSendPDFs(fullMessage, messageId);
-      
     } catch (e) {
       logger.severe('Error processing message $messageId: $e');
       print(chalk.red('❌ Error processing message $messageId: $e'));
     }
   }
 
-  Future<void> _extractAndSendPDFs(String emailContent, String messageId) async {
+  Future<void> _extractAndSendPDFs(
+    String emailContent,
+    String messageId,
+  ) async {
     try {
       // Simple email parsing - in production, use a proper email library
       final lines = emailContent.split('\r\n');
       bool inAttachment = false;
       String? attachmentName;
       final attachmentData = StringBuffer();
-      
+
       for (int i = 0; i < lines.length; i++) {
         final line = lines[i];
-        
+
         // Look for PDF attachment headers
         if (line.toLowerCase().contains('content-type: application/pdf')) {
           inAttachment = true;
           // Look for filename in next few lines
           for (int j = i; j < i + 5 && j < lines.length; j++) {
             if (lines[j].toLowerCase().contains('filename=')) {
-              final match = RegExp(r'filename[*]?=["\']*([^"\';\r\n]+)').firstMatch(lines[j]);
+              final match = RegExp(
+                r'filename[*]?=["'
+                "'"
+                ']*([^"'
+                "'"
+                ';\r\n]+)',
+              ).firstMatch(lines[j]);
               if (match != null) {
-                attachmentName = match.group(1);
+                attachmentName = match.group(1)!;
                 break;
               }
             }
           }
         }
-        
+
         // Look for base64 encoded data
         if (inAttachment && line.trim().isEmpty) {
           // Start collecting base64 data from next line
@@ -405,25 +416,28 @@ class EmailMonitor {
           break;
         }
       }
-      
-      if (attachmentData.length > 0 && attachmentName != null) {
+
+      if (attachmentData.toString().isNotEmpty && attachmentName != null) {
         await _sendPDFToOgents(
           attachmentData.toString(),
           attachmentName,
           messageId,
         );
       }
-      
     } catch (e) {
       logger.severe('Error extracting PDFs: $e');
       print(chalk.red('❌ Error extracting PDFs: $e'));
     }
   }
 
-  Future<void> _sendPDFToOgents(String base64Data, String filename, String messageId) async {
+  Future<void> _sendPDFToOgents(
+    String base64Data,
+    String filename,
+    String messageId,
+  ) async {
     try {
       print(chalk.yellow('📤 Sending PDF "$filename" to ogents agent...'));
-      
+
       // Prepare file information
       final fileInfo = {
         'filename': filename,
@@ -456,7 +470,6 @@ class EmailMonitor {
       }
 
       print(chalk.green('✅ PDF "$filename" sent to ogents agent successfully'));
-      
     } catch (e) {
       logger.severe('Error sending PDF to ogents: $e');
       print(chalk.red('❌ Error sending PDF to ogents: $e'));

@@ -1,0 +1,52 @@
+{
+  "project": "ogents",
+  "version": "1.0.0",
+  "description": "AI agent with atSign for file processing and LLM summarization",
+  "components": [
+    {
+      "name": "File Agent",
+      "purpose": "Receives file notifications and orchestrates processing",
+      "features": [
+        "File download from multiple sources",
+        "Content extraction",
+        "LLM communication",
+        "Response handling"
+      ]
+    },
+    {
+      "name": "LLM Service",
+      "purpose": "Provides text summarization capabilities",
+      "backends": [
+        "Simple rule-based",
+        "Ollama integration",
+        "Extensible architecture"
+      ]
+    },
+    {
+      "name": "File Sender",
+      "purpose": "Utility for sending files to the agent",
+      "capabilities": [
+        "Base64 encoding",
+        "atPlatform notifications",
+        "Response listening"
+      ]
+    }
+  ],
+  "technologies": {
+    "platform": "atPlatform",
+    "language": "Dart",
+    "encryption": "End-to-end via atSign",
+    "communication": "Notifications"
+  },
+  "supported_formats": [
+    "txt", "md", "json", "xml", "csv", "yaml", "yml",
+    "zip", "tar", "gz", "log"
+  ],
+  "use_cases": [
+    "Document analysis",
+    "Code review",
+    "Log analysis", 
+    "Data processing",
+    "Archive exploration"
+  ]
+}
