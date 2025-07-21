@@ -1,6 +1,18 @@
-# ogents - AI Agent with atSign File Processing
+# og## 📋 Features
 
-An AI agent with an atSign that automatically processes file notifications and provides summaries using LLM services via the atPlatform.
+- **📧 Email Monitoring**: Direct IMAP integration + directory monitoring for automated PDF processing
+- **🔔 Notification-Based**: Triggers automatically when files are sent via atPlatform
+- **📁 Multi-Format Support**: Handles text files, documents, archives, PDFs, and images
+- **🧠 AI Summarization**: Integrates with LLM services (Ollama) for intelligent content analysis
+- **🔒 Secure**: End-to-end encryption via atSign messaging
+- **🌐 URL Support**: Can process files from URLs as well as local files
+- **👁️ Advanced OCR**: Full multi-page PDF text extraction using Tesseract OCR
+- **📊 Archive Support**: Automatically extracts and processes ZIP/TAR archives
+- **⚡ Real-time**: Instant processing and response via atPlatform notifications
+- **📨 IMAP Integration**: Connect to Gmail, Outlook, Yahoo, and custom email servers
+- **🔍 Smart Processing**: Intelligent routing between OCR and LLM based on content typeAgent with atSign File Processing & Email Monitoring
+
+An AI agent with an atSign that automatically processes file notifications and provides intelligent summaries using LLM services via the atPlatform. Now includes comprehensive email monitoring with IMAP support for automated PDF processing from email attachments.
 
 ## 📋 Features
 
@@ -15,11 +27,12 @@ An AI agent with an atSign that automatically processes file notifications and p
 
 ## Architecture
 
-The system consists of three main components:
+The system consists of four main components:
 
 1. **File Agent** (`ogents`): Receives file notifications, downloads files, and orchestrates the summarization process
-2. **LLM Service** (`llm_service`): Provides text summarization capabilities using various LLM backends
-3. **File Sender** (`send_file`): Utility to send files to the agent for processing
+2. **Email Monitor** (`email_monitor`): Monitors email accounts or directories for PDF attachments and auto-sends to ogents
+3. **LLM Service** (`llm_service`): Provides text summarization capabilities using various LLM backends
+4. **File Sender** (`send_file`): Utility to manually send files to the agent for processing
 
 ## Installation
 
@@ -28,22 +41,32 @@ The system consists of three main components:
 - Dart SDK 3.8.1 or higher
 - Active atSign (get one from [my.atsign.com](https://my.atsign.com))
 - atSign keys properly configured
-- **Rust toolchain** (required for PDF OCR functionality)
+- **Tesseract OCR** and **ImageMagick** (required for PDF processing)
+- **Ghostscript** (for advanced PDF operations)
 
-### Installing Rust for OCR Support
+### Installing OCR Dependencies
 
-The PDF OCR functionality requires Rust. Install it using the provided script:
-
+**macOS:**
 ```bash
-# Install Rust toolchain
-./install_rust.sh
+# Install required OCR tools
+brew install tesseract imagemagick ghostscript
 
-# Reload environment variables
-source ~/.cargo/env
+# Verify installations
+tesseract --version
+magick --version
+gs --version
+```
 
-# Verify installation
-rustc --version
-cargo --version
+**Linux (Ubuntu/Debian):**
+```bash
+# Install required OCR tools
+sudo apt-get update
+sudo apt-get install tesseract-ocr imagemagick ghostscript
+
+# Verify installations
+tesseract --version
+convert --version
+gs --version
 ```
 
 ### Building from Source
@@ -53,6 +76,7 @@ git clone https://github.com/cconstab/ogents.git
 cd ogents
 dart pub get
 dart compile exe bin/ogents.dart -o ogents
+dart compile exe bin/email_monitor.dart -o email_monitor
 dart compile exe bin/llm_service.dart -o llm_service
 dart compile exe bin/send_file.dart -o send_file
 ```
@@ -95,6 +119,30 @@ The agent will start listening for file notifications and display:
 Send files to @agent_atsign using the key pattern: "file_share"
 ```
 
+### 4. Email Monitoring (Optional)
+
+Start email monitoring for automatic PDF processing from email attachments:
+
+**Directory Mode** (Monitor local folder):
+```bash
+./email_monitor -a @your_atsign -g @agent_atsign -n ogents -e ./email_attachments -i 30
+```
+
+**IMAP Mode** (Connect to email account):
+```bash
+./email_monitor -a @your_atsign -g @agent_atsign -n ogents \
+  --imap-server imap.gmail.com \
+  --email your.email@gmail.com \
+  --password your_app_password \
+  --ssl
+```
+
+**Supported Email Providers:**
+- **Gmail**: `imap.gmail.com` (requires App Password)
+- **Outlook**: `outlook.office365.com`  
+- **Yahoo**: `imap.mail.yahoo.com` (requires App Password)
+- **Custom IMAP servers**: Any RFC-compliant IMAP server
+
 ## Usage
 
 ### Sending Files for Processing
@@ -120,21 +168,28 @@ The process will:
 
 ## 🔧 Advanced Features
 
-### OCR Capabilities ✅
-The system now includes full OCR (Optical Character Recognition) functionality using Tesseract:
-- **PDF Text Extraction**: Extracts text from scanned PDFs
+### Full OCR Processing ✅
+The system includes comprehensive OCR (Optical Character Recognition) using native tools:
+- **Multi-page PDF Processing**: Handles PDFs up to 10 pages with complete text extraction
+- **High-Quality Image Conversion**: 300 DPI conversion for optimal OCR accuracy
+- **Intelligent Content Routing**: Automatically chooses between direct OCR return or LLM summarization
 - **Image Text Recognition**: Processes JPG, PNG, BMP, TIFF, and GIF images
 - **Multi-language Support**: Configurable language detection (default: English)
-- **Automatic Fallback**: Falls back to basic analysis if OCR fails
+- **Robust Error Handling**: Graceful fallback and detailed error reporting
 
-**Prerequisites**: Tesseract must be installed on your system:
-```bash
-# macOS
-brew install tesseract
+**Technical Stack**: 
+- Tesseract OCR for text extraction
+- ImageMagick for PDF-to-image conversion
+- Ghostscript for PDF processing and page counting
+- Native Dart implementation (no Rust required)
 
-# Verify installation
-tesseract --version
-```
+### Email Automation ✅
+Complete email monitoring system for automated PDF processing:
+- **IMAP Integration**: Direct connection to email accounts
+- **Directory Monitoring**: Watch local folders for new PDFs  
+- **Size Validation**: Automatic size checking (8MB limit) to prevent buffer overflow
+- **File Archival**: Processed files moved to timestamped archive folders
+- **Real-time Processing**: Immediate detection and processing of new PDFs
 
 ### Example Workflow
 
@@ -148,6 +203,18 @@ tesseract --version
    ./ogents -a @file_agent -l @llama -n ogents
    ```
 
+3. **Start Email Monitoring** (optional):
+   ```bash
+   ./email_monitor -a @sender -g @file_agent -n ogents -e ./email_test -i 30
+   ```
+
+4. **Send a File**:
+   ```bash
+   ./send_file -a @alice -g @file_agent -f document.pdf -n ogents
+   ```
+
+5. **Email Processing**: Place PDFs in monitored directory or email folder, get automatic summaries
+
 3. **Send a File**:
    ```bash
    ./send_file -a @alice -g @file_agent -f document.pdf -n ogents
@@ -155,44 +222,60 @@ tesseract --version
 
 4. **Receive Summary**: The sender will receive a detailed summary of the file content.
 
+## Email Monitoring
+
+The email monitor provides two modes for automated PDF processing:
+
+### Directory Mode
+Monitor a local directory for new PDF files:
+```bash
+./email_monitor -a @sender -g @agent -n ogents -e ./attachments -i 60
+```
+
+### IMAP Mode  
+Connect directly to email accounts:
+```bash
+./email_monitor -a @sender -g @agent -n ogents \
+  --imap-server imap.gmail.com \
+  --email user@gmail.com \
+  --password app_password \
+  --folder INBOX \
+  --ssl
+```
+
+**Features:**
+- Automatic PDF attachment detection
+- Size validation (max 8MB)
+- Email marking as read after processing
+- File archival with timestamps
+- Support for all major email providers
+
 ## File Format Support
 
 The agent can process various file formats:
 
 - **Text Files**: `.txt`, `.md`, `.log`, `.csv`, `.json`, `.xml`, `.yaml`
-- **PDF Documents**: `.pdf` (with advanced OCR text extraction)
+- **PDF Documents**: `.pdf` (with advanced multi-page OCR text extraction up to 10 pages)
 - **Archives**: `.zip`, `.tar`, `.gz` (extracts and processes text files within)
+- **Images**: `.jpg`, `.png`, `.bmp`, `.tiff`, `.gif` (OCR text extraction)
 - **Binary Files**: Basic analysis and metadata extraction
-- **Large Files**: Automatic content truncation to prevent overwhelming the LLM
+- **Large Files**: Automatic content truncation and size validation (8MB limit)
 
-### PDF Processing with Analysis
+### Advanced PDF Processing
 
 The system includes comprehensive PDF support with:
-- **PDF Detection**: Validates PDF file format and structure
-- **Metadata Extraction**: File size, basic document information
-- **Content Analysis**: Identifies document characteristics
-- **OCR Framework**: Ready for OCR integration (see OCR_SETUP.md)
+- **Multi-page OCR**: Process up to 10 pages per PDF with complete text extraction
+- **High-resolution Conversion**: 300 DPI image conversion for optimal OCR accuracy
+- **Smart Content Routing**: Single-page content returned directly, multi-page sent to LLM
+- **Robust Error Handling**: Graceful fallback and detailed error reporting
+- **Page Count Detection**: Automatic detection of PDF structure and page count
+- **Memory Management**: Efficient processing with temporary file cleanup
 
-**Current PDF Features:**
-- Native PDF format validation
-- File structure analysis and metadata extraction
-- Graceful handling of different PDF types
-- Detailed processing feedback and status reporting
-- Foundation for advanced OCR capabilities
-
-**Testing PDF Processing:**
-```bash
-# Create a test document
-dart create_test_pdf.dart
-
-# Test PDF processing
-dart test_pdf_processing.dart your_file.pdf
-
-# Full OCR setup (optional)
-# See OCR_SETUP.md for detailed instructions
-```
-
-**Current Implementation**: PDF files are detected and analyzed, providing detailed information about the document structure and processing recommendations.
+**OCR Technical Stack:**
+- Tesseract OCR engine for text extraction
+- ImageMagick for PDF-to-image conversion  
+- Ghostscript for PDF processing and validation
+- Native Dart implementation with external tool integration
 
 ## LLM Backend Options
 
@@ -231,6 +314,20 @@ abstract class LLMProcessor {
 - `-l, --llm-atsign`: atSign of the LLM service
 - `-n, --namespace`: Namespace (default: ogents)
 - `-p, --download-path`: Directory for downloads (default: ./downloads)
+- `-v, --verbose`: Enable verbose logging
+
+#### Email Monitor (`email_monitor`)
+- `-a, --atsign`: Your atSign (sender)
+- `-g, --agent`: atSign of the ogents file agent
+- `-n, --namespace`: Namespace (default: ogents)
+- `-e, --email-dir`: Directory to monitor (default: ./email_monitor)
+- `-i, --poll-interval`: Check interval in seconds (default: 60)
+- `--imap-server`: IMAP server hostname (e.g., imap.gmail.com)
+- `--imap-port`: IMAP port (default: 993 for SSL, 143 for plain)
+- `--email`: Email address for IMAP authentication
+- `--password`: Password (use app passwords for Gmail/Yahoo)
+- `--ssl`: Use SSL/TLS connection (default: true)
+- `--folder`: Email folder to monitor (default: INBOX)
 
 #### LLM Service (`llm_service`)
 - `-a, --atsign`: LLM service atSign
@@ -266,10 +363,13 @@ This project is designed to work with the [ogentic](https://github.com/cconstab/
 ## Example Use Cases
 
 1. **Document Analysis**: Send research papers, articles, or reports for quick summaries
-2. **Code Review**: Get automated analysis of source code files
-3. **Log Analysis**: Process log files for key insights and patterns
-4. **Data Processing**: Analyze CSV files and data exports
-5. **Archive Exploration**: Get overviews of compressed file contents
+2. **Email Automation**: Automatically process PDF attachments from email accounts
+3. **Code Review**: Get automated analysis of source code files
+4. **Log Analysis**: Process log files for key insights and patterns
+5. **Data Processing**: Analyze CSV files and data exports
+6. **Archive Exploration**: Get overviews of compressed file contents
+7. **Invoice Processing**: Monitor email for PDF invoices and auto-extract information
+8. **Research Workflows**: Automatically summarize academic papers from email subscriptions
 
 ## Troubleshooting
 
@@ -280,8 +380,22 @@ This project is designed to work with the [ogentic](https://github.com/cconstab/
 
 ### File Processing Issues
 - Check file permissions and paths
-- Verify supported file formats
+- Verify supported file formats (8MB size limit)
 - Monitor agent logs for detailed error messages
+- For PDFs: Ensure Tesseract, ImageMagick, and Ghostscript are installed
+
+### OCR Issues
+- Verify OCR dependencies: `tesseract --version`, `magick --version`, `gs --version`
+- Check PDF file integrity and format
+- Monitor logs for OCR processing errors
+- Large PDFs may be limited to first 10 pages
+
+### Email Monitor Issues
+- **IMAP Connection**: Verify server settings and credentials
+- **Gmail**: Use App Passwords, not regular passwords
+- **Directory Mode**: Check folder permissions and paths
+- **Size Limits**: PDFs over 8MB will be rejected
+- **Authentication**: Ensure proper atSign configuration
 
 ### LLM Service Issues
 - Ensure LLM service is running and accessible

@@ -1,94 +1,64 @@
-# Enhanced Email Monitor with IMAP Support
+# Complete Email Monitor Guide
 
-The email monitor now supports both **directory monitoring** and **IMAP email monitoring** for automatic PDF processing.
+The email monitor provides comprehensive email automation with both **directory monitoring** and **IMAP email monitoring** for automatic PDF processing.
 
-## Features
+## Quick Start
 
-- 📁 **Directory Mode**: Monitor a local directory for PDF files
-- 📧 **IMAP Mode**: Connect directly to email accounts and monitor for PDF attachments
-- 🔄 **Automatic Processing**: PDFs are automatically sent to ogents for OCR and summarization
-- 📦 **File Archival**: Processed files are moved to a `processed` subfolder
-- 🔐 **Secure Communication**: Uses atPlatform for secure agent-to-agent communication
-
-## Installation
-
-Ensure you have the enhanced version compiled:
-
+### 1. Build the Email Monitor
 ```bash
-dart pub get
 dart compile exe bin/email_monitor.dart -o email_monitor
 ```
 
-## Usage
-
-### Directory Mode (Original)
-
-Monitor a local directory for PDF files:
-
+### 2. Start the ogents File Agent
 ```bash
-./email_monitor \
-  -a @your_atsign \
-  -g @agent_atsign \
-  -n ogents \
-  -e ./email_attachments \
-  -i 30
+./ogents -a @agent_atsign -l @llm_atsign -n ogents -v
 ```
 
-**Options:**
-- `-e, --email-dir`: Directory to monitor for PDF files
-- `-i, --poll-interval`: Check interval in seconds (default: 60)
+### 3. Choose Your Monitoring Mode
 
-### IMAP Mode (New!)
-
-Connect directly to an email account:
-
+**Directory Mode** (Monitor local folder):
 ```bash
-./email_monitor \
-  -a @your_atsign \
-  -g @agent_atsign \
-  -n ogents \
-  --imap-server imap.gmail.com \
-  --email your.email@gmail.com \
-  --password your_app_password \
-  --ssl \
-  --folder INBOX \
-  -i 60
+./email_monitor -a @your_atsign -g @agent_atsign -n ogents -e ./email_attachments -i 30
 ```
 
-**IMAP Options:**
-- `--imap-server`: IMAP server hostname (e.g., imap.gmail.com)
-- `--imap-port`: IMAP port (default: 993 for SSL, 143 for non-SSL)
-- `--email`: Your email address
-- `--password`: Your email password (use app passwords for Gmail)
-- `--ssl`: Use SSL/TLS connection (default: true)
-- `--folder`: Email folder to monitor (default: INBOX)
-
-## Email Provider Examples
-
-### Gmail
+**IMAP Mode** (Connect to email account):
 ```bash
-./email_monitor \
-  -a @your_atsign \
-  -g @agent_atsign \
-  -n ogents \
+./email_monitor -a @your_atsign -g @agent_atsign -n ogents \
   --imap-server imap.gmail.com \
   --email your.email@gmail.com \
   --password your_app_password \
   --ssl
 ```
 
-**Note**: For Gmail, you must use an App Password, not your regular password:
-1. Enable 2-factor authentication
-2. Go to Google Account settings
-3. Generate an App Password for "Mail"
-4. Use this 16-character password
+## Features
 
-### Outlook/Hotmail
+- 📁 **Directory Mode**: Monitor local folders for PDF files
+- 📧 **IMAP Mode**: Direct email account integration
+- 🔄 **Real-time Processing**: Automatic PDF detection and processing
+- 📦 **File Management**: Automatic archival with timestamps
+- 🔐 **Secure Communication**: End-to-end encryption via atPlatform
+- 📏 **Size Validation**: 8MB limit with helpful error messages
+- ⚡ **Performance**: Efficient polling with configurable intervals
+
+## Email Provider Setup
+
+### Gmail
 ```bash
-./email_monitor \
-  -a @your_atsign \
-  -g @agent_atsign \
-  -n ogents \
+./email_monitor -a @your_atsign -g @agent_atsign -n ogents \
+  --imap-server imap.gmail.com \
+  --email your.email@gmail.com \
+  --password your_app_password \
+  --ssl
+```
+
+**Gmail Requirements:**
+1. Enable 2-factor authentication
+2. Generate App Password: Google Account → Security → App passwords
+3. Use the 16-character app password (not your regular password)
+
+### Outlook/Microsoft 365
+```bash
+./email_monitor -a @your_atsign -g @agent_atsign -n ogents \
   --imap-server outlook.office365.com \
   --email your.email@outlook.com \
   --password your_password \
@@ -97,22 +67,21 @@ Connect directly to an email account:
 
 ### Yahoo Mail
 ```bash
-./email_monitor \
-  -a @your_atsign \
-  -g @agent_atsign \
-  -n ogents \
+./email_monitor -a @your_atsign -g @agent_atsign -n ogents \
   --imap-server imap.mail.yahoo.com \
   --email your.email@yahoo.com \
   --password your_app_password \
   --ssl
 ```
 
+**Yahoo Requirements:**
+1. Enable 2-factor authentication  
+2. Generate App Password: Account Security → Generate app password
+3. Use the generated password
+
 ### Custom IMAP Server
 ```bash
-./email_monitor \
-  -a @your_atsign \
-  -g @agent_atsign \
-  -n ogents \
+./email_monitor -a @your_atsign -g @agent_atsign -n ogents \
   --imap-server mail.yourdomain.com \
   --imap-port 993 \
   --email user@yourdomain.com \
@@ -120,87 +89,177 @@ Connect directly to an email account:
   --ssl
 ```
 
+## Command Reference
+
+### Required Options
+- `-a, --atsign`: Your atSign (sender)
+- `-g, --agent`: ogents file agent atSign  
+- `-n, --namespace`: Namespace (typically "ogents")
+
+### Directory Mode Options
+- `-e, --email-dir`: Directory to monitor (default: ./email_monitor)
+- `-i, --poll-interval`: Check interval in seconds (default: 60)
+
+### IMAP Mode Options
+- `--imap-server`: IMAP hostname (e.g., imap.gmail.com)
+- `--imap-port`: IMAP port (993 for SSL, 143 for plain)
+- `--email`: Email address for authentication
+- `--password`: Email password (use app passwords)
+- `--ssl`: Use SSL/TLS (default: true)
+- `--folder`: Email folder to monitor (default: INBOX)
+
 ## How It Works
 
-### Directory Mode
+### Directory Mode Workflow
 1. Monitor specified directory for new PDF files
-2. When PDF detected, read file and encode as base64
+2. When PDF detected, validate size (max 8MB)
 3. Send to ogents agent via atPlatform notification
-4. Wait for summary response
-5. Display summary and move file to `processed/` subfolder
+4. Wait for summary response and display
+5. Move processed file to `processed/` subfolder with timestamp
 
-### IMAP Mode
+### IMAP Mode Workflow
 1. Connect to IMAP server with provided credentials
 2. Select specified folder (default: INBOX)
 3. Check for new unread emails every poll interval
-4. For each new email, scan for PDF attachments
-5. Extract PDF data and send to ogents agent
-6. Wait for summary response and display
-7. Mark email as read
+4. Scan emails for PDF attachments
+5. Validate attachment size and extract data
+6. Send to ogents agent for processing
+7. Display summary and mark email as read
 
-## Security Considerations
+## File Size Management
 
-- **App Passwords**: Use app-specific passwords for Gmail and other providers
-- **atPlatform**: All communication between agents is encrypted via atPlatform
-- **Local Storage**: Email credentials are not stored permanently
-- **Read-Only**: The system only reads emails and marks them as read
+The system automatically handles file size limitations:
 
-## Common IMAP Settings
+- **Maximum Size**: 8MB (atPlatform notification limit)
+- **Size Display**: Shows file sizes in MB for visibility
+- **Error Handling**: Helpful messages for oversized files
+- **Suggestions**: Recommends using smaller PDFs or implementing chunking
 
-| Provider | IMAP Server | Port | SSL | Notes |
-|----------|-------------|------|-----|-------|
-| Gmail | imap.gmail.com | 993 | Yes | Requires App Password |
-| Outlook | outlook.office365.com | 993 | Yes | |
-| Yahoo | imap.mail.yahoo.com | 993 | Yes | Requires App Password |
-| Apple iCloud | imap.mail.me.com | 993 | Yes | Requires App Password |
+**Example Output:**
+```
+📧 Processing PDF file: document.pdf (12.6MB)
+❌ File too large: 12.6MB (max: 8MB)
+💡 Consider using smaller PDFs or implement file chunking
+```
+
+## Integration Examples
+
+### Email Rules Integration
+Set up email rules to forward PDFs to a dedicated monitoring account:
+
+1. **Gmail**: Settings → Filters → Forward PDFs to monitoring account
+2. **Outlook**: Rules → Forward emails with PDF attachments
+3. **Corporate**: IT can set server-side rules for department monitoring
+
+### Multiple Account Monitoring
+Run multiple instances for different email accounts:
+
+```bash
+# Personal email monitor
+./email_monitor -a @alice -g @agent -n ogents --imap-server imap.gmail.com --email alice@gmail.com --password app1 &
+
+# Work email monitor  
+./email_monitor -a @alice_work -g @agent -n ogents --imap-server outlook.office365.com --email alice@company.com --password app2 &
+```
+
+### Production Deployment
+For 24/7 monitoring, consider:
+
+- **Systemd service** (Linux)
+- **Cron job restart** (periodic restart)
+- **Docker container** (containerized deployment)
+- **Process monitoring** (PM2, supervisor)
 
 ## Troubleshooting
 
 ### IMAP Connection Issues
-- Verify IMAP is enabled in your email provider settings
-- Use app passwords for providers that require them
-- Check firewall settings for outbound connections
-- Try different port numbers (993 for SSL, 143 for plain)
+```
+❌ Failed to connect to IMAP server
+```
+**Solutions:**
+- Verify server hostname and port
+- Check SSL/TLS settings
+- Ensure firewall allows IMAP connections
+- Test with email client (Thunderbird, Apple Mail)
 
 ### Authentication Errors
-- Double-check email and password
-- For Gmail: Ensure 2FA is enabled and you're using an App Password
-- For corporate emails: Check with IT about IMAP access policies
-
-### No PDFs Found
-- Verify emails contain PDF attachments
-- Check the folder name (case-sensitive)
-- Monitor logs for processing errors
-- Test with directory mode first to isolate issues
-
-## Examples in Action
-
-### Start IMAP monitoring for Gmail:
-```bash
-./email_monitor -a @alice -g @bob -n ogents --imap-server imap.gmail.com --email alice@gmail.com --password abcd1234efgh5678
 ```
-
-### Start directory monitoring:
-```bash
-./email_monitor -a @alice -g @bob -n ogents -e ./email_test -i 30
+❌ IMAP authentication failed
 ```
+**Solutions:**
+- Use app passwords for Gmail/Yahoo (not regular passwords)
+- Enable IMAP in email account settings
+- Check username format (usually full email address)
+- Verify 2FA is enabled for app password generation
 
-The system will automatically detect which mode to use based on whether `--imap-server` is provided.
+### atPlatform Connection Issues
+```
+❌ Failed to initialize atClient
+```
+**Solutions:**
+- Verify atSign keys are properly configured
+- Check atSign activation status
+- Ensure network connectivity to atPlatform
+- Check atSign key file permissions
 
-## Advanced Features
+### File Processing Errors
+```
+❌ Error sending PDF to ogents
+```
+**Solutions:**
+- Verify ogents agent is running
+- Check agent atSign is correct
+- Ensure namespace matches between services
+- Check file size (must be under 8MB)
 
-- **Multi-page PDFs**: Supports PDFs up to 10 pages with complete OCR processing
-- **Smart Summarization**: Automatically routes content to LLM for intelligent summaries
-- **Error Recovery**: Automatic reconnection on IMAP connection failures
-- **Concurrent Processing**: Can handle multiple PDF attachments in a single email
+### No Emails Found
+```
+⚠️ No new emails found
+```
+**Possible Causes:**
+- All emails already processed (check UID tracking)
+- No unread emails in specified folder
+- Folder name case sensitivity (use exact name)
+- Email filters preventing delivery
 
-## Integration with Email Clients
+## Security Considerations
 
-You can integrate this with various email setups:
+### Email Security
+- **App Passwords**: Never use regular email passwords
+- **IMAP SSL**: Always use SSL/TLS encryption
+- **Account Isolation**: Consider dedicated monitoring accounts
+- **Credential Management**: Store passwords securely
 
-1. **Email Rules**: Set up email rules to forward PDFs to a dedicated account
-2. **Multiple Accounts**: Run multiple instances for different email accounts
-3. **Webhook Integration**: Could be extended to work with email webhooks
-4. **Server Deployment**: Run on a server for 24/7 monitoring
+### atPlatform Security
+- **End-to-End Encryption**: All file transfers encrypted
+- **Access Control**: Only specified atSigns can communicate
+- **No Intermediate Storage**: Files processed in memory
+- **Audit Trail**: Full logging of file transfers
 
-The enhanced email monitor provides a complete solution for automated PDF processing from both local files and live email streams.
+### Network Security
+- **Firewall**: Ensure IMAP ports (993/143) are accessible
+- **VPN**: Consider VPN for corporate email access
+- **DNS**: Verify IMAP server DNS resolution
+- **Certificates**: Validate SSL certificates
+
+## Performance Optimization
+
+### Polling Intervals
+- **Low Volume**: 300 seconds (5 minutes)
+- **Medium Volume**: 60 seconds (1 minute)  
+- **High Volume**: 30 seconds
+- **Real-time**: 10 seconds (high resource usage)
+
+### Resource Management
+- **Memory**: Efficient PDF processing with cleanup
+- **Network**: Optimized IMAP connection reuse
+- **Storage**: Automatic processed file archival
+- **CPU**: OCR processing is CPU-intensive
+
+### Scaling Considerations
+- **Multiple Instances**: Run separate instances per email account
+- **Load Balancing**: Distribute across multiple servers
+- **Database**: Consider database for large-scale UID tracking
+- **Monitoring**: Implement health checks and alerts
+
+This comprehensive email monitoring system provides enterprise-ready automation for PDF processing workflows with both flexibility and security.
