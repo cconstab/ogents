@@ -195,6 +195,9 @@ choco install tesseract imagemagick ghostscript
 git clone https://github.com/cconstab/ogents.git
 cd ogents
 dart pub get
+
+# Generate database code (REQUIRED for clean installations!)
+dart run build_runner build
 ```
 
 ## 🔄 How It Works
@@ -217,6 +220,65 @@ graph LR
 3. **Output**: Intelligent summaries via atPlatform
 
 ## ⚡ Quick Start
+
+### Prerequisites
+
+- **Dart SDK 3.8.1 or higher**
+- **Active atSign** from [my.atsign.com](https://my.atsign.com)
+- **Tesseract OCR**, **ImageMagick**, and **Ghostscript** for PDF processing
+
+### Installing OCR Dependencies
+
+**macOS:**
+```bash
+# Install required OCR tools
+brew install tesseract imagemagick ghostscript
+
+# Verify installations
+tesseract --version
+magick --version
+gs --version
+```
+
+**Linux (Ubuntu/Debian):**
+```bash
+# Install required OCR tools
+sudo apt-get update
+sudo apt-get install tesseract-ocr imagemagick ghostscript
+
+# Verify installations
+tesseract --version
+magick --version
+gs --version
+```
+
+**Windows:**
+```bash
+# Install via Chocolatey
+choco install tesseract imagemagick ghostscript
+
+# Verify installations
+tesseract --version
+magick --version
+gs --version
+```
+
+### Installation & Setup
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/cconstab/ogents.git
+cd ogents
+
+# 2. Install Dart dependencies
+dart pub get
+
+# 3. Generate database code (REQUIRED!)
+dart run build_runner build
+
+# 4. Setup your atSign credentials
+dart run at_onboarding_cli -a @your_atsign
+```
 
 ### 1. Setup atSign
 ```bash
@@ -375,6 +437,38 @@ dart run bin/email_monitor.dart -a @user -g @agent -n ogents \
 This project is licensed under the BSD 3-Clause License - see the [LICENSE](LICENSE) file for details.
 
 ## 🔗 Related Projects & Resources
+
+## 🔧 Troubleshooting
+
+### Database Errors on Clean Installation
+
+If you see database-related errors when first running `ogents`, ensure you've run the code generation step:
+
+```bash
+# Generate required database files
+dart run build_runner build
+```
+
+This creates the `lib/src/database_service.g.dart` file which contains the generated database code needed by the Drift ORM.
+
+### Common Issues
+
+**"NoSuchMethodError" or database connection errors:**
+- Run `dart run build_runner build` to generate database code
+- Ensure SQLite is available on your system
+- Check that all dependencies are installed with `dart pub get`
+
+**PDF processing failures:**
+- Verify Tesseract OCR is installed: `tesseract --version`
+- Verify ImageMagick is installed: `magick --version` 
+- Verify Ghostscript is installed: `gs --version`
+
+**Email monitoring not detecting PDFs:**
+- Check IMAP settings and credentials
+- Ensure emails contain PDF attachments
+- Review debug output for processing details
+
+---
 
 ### **atPlatform Ecosystem**
 - **[atPlatform Website](https://atsign.com)** - Get your free atSign and learn about the platform
