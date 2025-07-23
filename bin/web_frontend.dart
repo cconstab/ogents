@@ -16,6 +16,8 @@ import 'package:shelf_web_socket/shelf_web_socket.dart';
 import 'package:uuid/uuid.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import 'package:ogents/src/database_service.dart';
+
 /// Web frontend for ogents that displays file processing results
 void main(List<String> arguments) async {
   await runZonedGuarded(
@@ -124,8 +126,8 @@ class WebServer {
   final int port;
 
   final logger = AtSignLogger('WebServer');
-  final List<ProcessedFile> processedFiles = [];
   final Set<WebSocketChannel> webSocketClients = {};
+  late AppDatabase database;
 
   WebServer({
     required this.atClient,
@@ -134,6 +136,10 @@ class WebServer {
   });
 
   Future<void> start() async {
+    // Initialize database
+    database = AppDatabase();
+    print(chalk.blue('📊 Database initialized'));
+
     // Setup notification listener
     await _setupNotificationListener();
 
@@ -144,6 +150,13 @@ class WebServer {
     router.get('/api/files', _handleGetFiles);
     router.get('/api/files/<fileId>/download', _handleDownloadFile);
     router.get('/api/files/<fileId>', _handleGetFile);
+    router.get('/api/stats', _handleGetStats);
+    router.get('/api/search', _handleSearchFiles);
+    router.get('/api/calendar', _handleGetCalendarData);
+    router.get('/api/files/date/<date>', _handleGetFilesByDate);
+    router.delete('/api/files/<fileId>', _handleDeleteFile);
+    router.delete('/api/files/cleanup/<days>', _handleCleanupOldFiles);
+    router.post('/api/files/<fileId>/extract-title', _handleExtractTitle);
 
     // WebSocket endpoint
     router.get(
@@ -185,45 +198,36 @@ class WebServer {
     print(chalk.gray('Press Ctrl+C to stop'));
 
     // Keep running
-    ProcessSignal.sigint.watch().listen((signal) {
+    ProcessSignal.sigint.watch().listen((signal) async {
       print(chalk.yellow('\n🛑 Shutting down server...'));
+      await database.close();
       server.close(force: true);
       exit(0);
     });
   }
 
   Future<void> _setupNotificationListener() async {
-    // Listen for file sharing notifications (original functionality)
-    atClient.notificationService
-        .subscribe(regex: '$nameSpace:file_share', shouldDecrypt: true)
-        .listen((notification) async {
-          try {
-            await _handleNotification(notification);
-          } catch (e) {
-            logger.severe('Error handling notification: $e');
-          }
-        });
+    // The web frontend should NOT process file_share notifications directly.
+    // That's handled by the main ogents file agent. The web frontend only
+    // listens for the processed results.
 
-    // Listen for file summary notifications (fallback for processed files)
-    atClient.notificationService
-        .subscribe(regex: 'file_summary.$nameSpace', shouldDecrypt: true)
-        .listen((notification) async {
-          print(chalk.cyan('🔔 Received file summary notification: ${notification.key}'));
-          print(chalk.gray('📨 From: ${notification.from}'));
-          try {
-            await _handleFileSummaryNotification(notification);
-          } catch (e) {
-            logger.severe('Error handling file summary notification: $e');
-          }
-        });
+    // The web frontend should NOT process file_summary notifications.
+    // file_summary notifications are sent back to the original file sender.
+    // The web frontend only processes web_frontend_data notifications.
 
     // Listen for web frontend data notifications (processed files)
     atClient.notificationService
-        .subscribe(regex: '$nameSpace:web_frontend_data', shouldDecrypt: false)
+        .subscribe(regex: 'web_frontend_data.$nameSpace', shouldDecrypt: true)
         .listen((notification) async {
-          print(chalk.cyan('🔔 Received web frontend notification: ${notification.key}'));
+          print(
+            chalk.cyan(
+              '🔔 Received web frontend notification: ${notification.key}',
+            ),
+          );
           print(chalk.gray('📨 From: ${notification.from}'));
-          print(chalk.gray('📄 Value: ${notification.value?.substring(0, 100)}...'));
+          print(
+            chalk.gray('📄 Value: ${notification.value?.substring(0, 100)}...'),
+          );
           try {
             await _handleWebFrontendNotification(notification);
           } catch (e) {
@@ -235,143 +239,13 @@ class WebServer {
     atClient.notificationService
         .subscribe(regex: '$nameSpace', shouldDecrypt: false)
         .listen((notification) async {
-          print(chalk.magenta('🔍 DEBUG - All notifications: ${notification.key}'));
+          print(
+            chalk.magenta('🔍 DEBUG - All notifications: ${notification.key}'),
+          );
           print(chalk.gray('📨 From: ${notification.from}'));
         });
 
     print(chalk.green('🔔 Listening for file processing notifications...'));
-  }
-
-  Future<void> _handleNotification(AtNotification notification) async {
-    try {
-      if (notification.value == null) return;
-
-      final data = jsonDecode(notification.value!);
-
-      // Check if this is a response notification (contains summary)
-      if (data['summary'] != null) {
-        final processedFile = ProcessedFile(
-          id: Uuid().v4(),
-          filename: data['filename'] ?? 'Unknown File',
-          originalData: data['original_data'],
-          summary: data['summary'],
-          processedAt: DateTime.now(),
-          sender: notification.from,
-          fileSize: data['file_size'],
-          fileType: data['file_type'],
-          ocrText: data['ocr_text'],
-        );
-
-        processedFiles.insert(
-          0,
-          processedFile,
-        ); // Add to beginning for newest first
-
-        // Keep only last 100 files
-        if (processedFiles.length > 100) {
-          processedFiles.removeRange(100, processedFiles.length);
-        }
-
-        print(chalk.green('📄 New file processed: ${processedFile.filename}'));
-
-        // Broadcast to WebSocket clients
-        _broadcastToClients({
-          'type': 'new_file',
-          'file': processedFile.toJson(),
-        });
-      }
-    } catch (e) {
-      logger.severe('Error processing notification: $e');
-    }
-  }
-
-  Future<void> _handleFileSummaryNotification(AtNotification notification) async {
-    try {
-      print(chalk.yellow('🔍 Processing file summary notification...'));
-      print(chalk.gray('Key: ${notification.key}'));
-      print(chalk.gray('From: ${notification.from}'));
-      print(chalk.gray('To: ${notification.to}'));
-      print(chalk.gray('Raw Value: ${notification.value}'));
-      
-      if (notification.value == null || notification.value!.isEmpty) {
-        print(chalk.red('❌ Notification value is null or empty'));
-        return;
-      }
-
-      try {
-        final data = jsonDecode(notification.value!);
-        print(chalk.gray('Parsed data: ${data.toString()}'));
-        
-        // Check if this is a summary notification (successful processing)
-        if (data['filename'] != null && data['summary'] != null) {
-          final filename = data['filename'];
-          final summary = data['summary'];
-          
-          // Check if we already have this file to avoid duplicates
-          final existingFile = processedFiles.where((file) => 
-            file.filename == filename && 
-            file.summary == summary
-          );
-          
-          if (existingFile.isNotEmpty) {
-            print(chalk.yellow('⚠️ File already exists in dashboard: $filename'));
-            return;
-          }
-          
-          final processedFile = ProcessedFile(
-            id: Uuid().v4(),
-            filename: filename,
-            originalData: null, // File summary notifications don't include original data
-            summary: summary,
-            processedAt: DateTime.parse(data['timestamp'] ?? DateTime.now().toIso8601String()),
-            sender: data['agent'] ?? notification.from,
-            fileSize: null,
-            fileType: _getFileType(filename),
-            ocrText: null,
-          );
-
-          processedFiles.insert(0, processedFile); // Add to beginning for newest first
-          
-          // Keep only last 100 files
-          if (processedFiles.length > 100) {
-            processedFiles.removeRange(100, processedFiles.length);
-          }
-
-          print(chalk.green('📄 File summary received: ${processedFile.filename}'));
-          print(chalk.blue('📊 Total files now: ${processedFiles.length}'));
-          
-          // Broadcast to WebSocket clients
-          _broadcastToClients({
-            'type': 'new_file',
-            'file': processedFile.toJson(),
-          });
-          print(chalk.green('📡 Broadcasted to ${webSocketClients.length} WebSocket clients'));
-        } else if (data['error'] != null || data['status'] == 'failed') {
-          // Handle failed processing notifications
-          print(chalk.red('❌ File processing failed:'));
-          print(chalk.red('   Error: ${data['error'] ?? 'Unknown error'}'));
-          print(chalk.red('   File: ${data['filename'] ?? 'Unknown file'}'));
-          // Don't add failed processing to the dashboard
-        } else {
-          print(chalk.red('❌ Missing filename or summary in notification data'));
-          print(chalk.gray('Available fields: ${data.keys.join(', ')}'));
-        }
-      } catch (jsonError) {
-        print(chalk.red('❌ Failed to parse JSON: $jsonError'));
-        print(chalk.gray('Raw value was: ${notification.value}'));
-        
-        // Maybe the notification value is just a string (error message)?
-        if (notification.value!.toLowerCase().contains('error') || 
-            notification.value!.toLowerCase().contains('fail')) {
-          print(chalk.red('❌ Looks like an error notification: ${notification.value}'));
-        } else {
-          print(chalk.yellow('⚠️ Unexpected notification format'));
-        }
-      }
-    } catch (e) {
-      logger.severe('Error processing file summary notification: $e');
-      print(chalk.red('❌ Error processing file summary: $e'));
-    }
   }
 
   Future<void> _handleWebFrontendNotification(
@@ -384,10 +258,12 @@ class WebServer {
 
       // Check if this is a processed file notification
       if (data['type'] == 'processed_file') {
-        final processedFile = ProcessedFile(
+        var processedFile = ProcessedFileModel(
           id: Uuid().v4(),
           filename: data['filename'] ?? 'Unknown File',
-          originalData: data['fileData'], // Base64 encoded file data
+          originalData: data['fileData'] != null
+              ? base64Decode(data['fileData'])
+              : null, // Decode base64 to bytes
           summary: data['summary'],
           processedAt: DateTime.parse(
             data['processedAt'] ?? DateTime.now().toIso8601String(),
@@ -396,17 +272,35 @@ class WebServer {
           fileSize: data['fileSize'],
           fileType: _getFileType(data['filename']),
           ocrText: null, // Will be null for LLM summarized files
+          agentAtSign: data['agent'],
         );
 
-        processedFiles.insert(
-          0,
-          processedFile,
-        ); // Add to beginning for newest first
+        // Save to database
+        await database.insertProcessedFile(processedFile.toDbCompanion());
 
-        // Keep only last 100 files
-        if (processedFiles.length > 100) {
-          processedFiles.removeRange(100, processedFiles.length);
+        // Extract title automatically for new files
+        final extractedTitle = await _extractTitleFromSummary(
+          processedFile.summary,
+        );
+        if (extractedTitle != null) {
+          await database.updateFileTitle(processedFile.id, extractedTitle);
+          processedFile = ProcessedFileModel(
+            id: processedFile.id,
+            filename: processedFile.filename,
+            originalData: processedFile.originalData,
+            summary: processedFile.summary,
+            title: extractedTitle,
+            processedAt: processedFile.processedAt,
+            sender: processedFile.sender,
+            fileSize: processedFile.fileSize,
+            fileType: processedFile.fileType,
+            ocrText: processedFile.ocrText,
+            agentAtSign: processedFile.agentAtSign,
+          );
         }
+
+        // Cleanup old files (keep only last 100)
+        await database.cleanupOldFiles(keepCount: 100);
 
         print(
           chalk.green(
@@ -472,43 +366,64 @@ class WebServer {
   }
 
   Future<shelf.Response> _handleGetFiles(shelf.Request request) async {
-    final filesJson = processedFiles.map((f) => f.toJson()).toList();
-    return shelf.Response.ok(
-      jsonEncode(filesJson),
-      headers: {'Content-Type': 'application/json'},
-    );
+    try {
+      final files = await database.getAllProcessedFiles();
+      final filesJson = files
+          .map((f) => ProcessedFileModel.fromDb(f).toJson())
+          .toList();
+      return shelf.Response.ok(
+        jsonEncode(filesJson),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      logger.severe('Error getting files: $e');
+      return shelf.Response.internalServerError(
+        body: jsonEncode({'error': 'Failed to get files: $e'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
   }
 
   Future<shelf.Response> _handleGetFile(shelf.Request request) async {
-    final fileId = request.params['fileId']!;
-    final file = processedFiles.firstWhere(
-      (f) => f.id == fileId,
-      orElse: () => throw StateError('File not found'),
-    );
+    try {
+      final fileId = request.params['fileId']!;
+      final file = await database.getProcessedFileById(fileId);
 
-    return shelf.Response.ok(
-      jsonEncode(file.toJson()),
-      headers: {'Content-Type': 'application/json'},
-    );
+      if (file == null) {
+        return shelf.Response.notFound(
+          jsonEncode({'error': 'File not found'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      return shelf.Response.ok(
+        jsonEncode(ProcessedFileModel.fromDb(file).toJson()),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      logger.severe('Error getting file: $e');
+      return shelf.Response.internalServerError(
+        body: jsonEncode({'error': 'Failed to get file: $e'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
   }
 
   Future<shelf.Response> _handleDownloadFile(shelf.Request request) async {
     try {
       final fileId = request.params['fileId']!;
-      final file = processedFiles.firstWhere(
-        (f) => f.id == fileId,
-        orElse: () => throw StateError('File not found'),
-      );
+      final file = await database.getProcessedFileById(fileId);
+
+      if (file == null) {
+        return shelf.Response.notFound('File not found');
+      }
 
       if (file.originalData == null) {
         return shelf.Response.notFound('Original file data not available');
       }
 
-      // Decode base64 data
-      final bytes = base64Decode(file.originalData!);
-
       return shelf.Response.ok(
-        bytes,
+        file.originalData!,
         headers: {
           'Content-Type': 'application/pdf',
           'Content-Disposition': 'attachment; filename="${file.filename}"',
@@ -521,41 +436,251 @@ class WebServer {
       );
     }
   }
-}
 
-/// Represents a processed file with its summary
-class ProcessedFile {
-  final String id;
-  final String filename;
-  final String? originalData; // Base64 encoded file data
-  final String summary;
-  final DateTime processedAt;
-  final String sender;
-  final int? fileSize;
-  final String? fileType;
-  final String? ocrText;
+  Future<shelf.Response> _handleGetStats(shelf.Request request) async {
+    try {
+      final stats = await database.getStats();
+      return shelf.Response.ok(
+        jsonEncode(stats),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      logger.severe('Error getting stats: $e');
+      return shelf.Response.internalServerError(
+        body: jsonEncode({'error': 'Failed to get stats: $e'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
 
-  ProcessedFile({
-    required this.id,
-    required this.filename,
-    this.originalData,
-    required this.summary,
-    required this.processedAt,
-    required this.sender,
-    this.fileSize,
-    this.fileType,
-    this.ocrText,
-  });
+  Future<shelf.Response> _handleSearchFiles(shelf.Request request) async {
+    try {
+      final query = request.url.queryParameters['q'];
+      if (query == null || query.isEmpty) {
+        return shelf.Response.badRequest(
+          body: jsonEncode({'error': 'Query parameter "q" is required'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
 
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'filename': filename,
-    'summary': summary,
-    'processedAt': processedAt.toIso8601String(),
-    'sender': sender,
-    'fileSize': fileSize,
-    'fileType': fileType,
-    'hasOriginalData': originalData != null,
-    'ocrText': ocrText,
-  };
+      final files = await database.searchFiles(query);
+      final filesJson = files
+          .map((f) => ProcessedFileModel.fromDb(f).toJson())
+          .toList();
+
+      return shelf.Response.ok(
+        jsonEncode({
+          'query': query,
+          'results': filesJson,
+          'count': filesJson.length,
+        }),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      logger.severe('Error searching files: $e');
+      return shelf.Response.internalServerError(
+        body: jsonEncode({'error': 'Failed to search files: $e'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
+
+  Future<shelf.Response> _handleGetCalendarData(shelf.Request request) async {
+    try {
+      final groupedFiles = await database.getFilesGroupedByDate();
+
+      // Convert to calendar format
+      final calendarData = <String, dynamic>{};
+      for (final entry in groupedFiles.entries) {
+        calendarData[entry.key] = {
+          'count': entry.value.length,
+          'files': entry.value
+              .map((f) => ProcessedFileModel.fromDb(f).toJson())
+              .toList(),
+        };
+      }
+
+      return shelf.Response.ok(
+        jsonEncode(calendarData),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      logger.severe('Error getting calendar data: $e');
+      return shelf.Response.internalServerError(
+        body: jsonEncode({'error': 'Failed to get calendar data: $e'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
+
+  Future<shelf.Response> _handleGetFilesByDate(shelf.Request request) async {
+    try {
+      final dateStr = request.params['date']!;
+      final date = DateTime.parse(dateStr);
+      final nextDay = date.add(Duration(days: 1));
+
+      final files = await database.getFilesByDateRange(date, nextDay);
+      final filesJson = files
+          .map((f) => ProcessedFileModel.fromDb(f).toJson())
+          .toList();
+
+      return shelf.Response.ok(
+        jsonEncode({
+          'date': dateStr,
+          'files': filesJson,
+          'count': filesJson.length,
+        }),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      logger.severe('Error getting files by date: $e');
+      return shelf.Response.internalServerError(
+        body: jsonEncode({'error': 'Failed to get files by date: $e'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
+
+  Future<shelf.Response> _handleDeleteFile(shelf.Request request) async {
+    try {
+      final fileId = request.params['fileId']!;
+      final deleted = await database.deleteFileById(fileId);
+
+      if (deleted) {
+        // Broadcast deletion to WebSocket clients
+        _broadcastToClients({'type': 'file_deleted', 'fileId': fileId});
+
+        return shelf.Response.ok(
+          jsonEncode({'success': true, 'message': 'File deleted successfully'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      } else {
+        return shelf.Response.notFound(
+          jsonEncode({'error': 'File not found'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+    } catch (e) {
+      logger.severe('Error deleting file: $e');
+      return shelf.Response.internalServerError(
+        body: jsonEncode({'error': 'Failed to delete file: $e'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
+
+  Future<shelf.Response> _handleCleanupOldFiles(shelf.Request request) async {
+    try {
+      final daysStr = request.params['days']!;
+      final days = int.parse(daysStr);
+      final cutoffDate = DateTime.now().subtract(Duration(days: days));
+
+      final deletedCount = await database.deleteFilesOlderThan(cutoffDate);
+
+      // Broadcast cleanup to WebSocket clients
+      _broadcastToClients({
+        'type': 'files_cleaned',
+        'deletedCount': deletedCount,
+        'cutoffDate': cutoffDate.toIso8601String(),
+      });
+
+      return shelf.Response.ok(
+        jsonEncode({
+          'success': true,
+          'deletedCount': deletedCount,
+          'message': 'Deleted $deletedCount files older than $days days',
+        }),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      logger.severe('Error cleaning up old files: $e');
+      return shelf.Response.internalServerError(
+        body: jsonEncode({'error': 'Failed to cleanup old files: $e'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
+
+  Future<shelf.Response> _handleExtractTitle(shelf.Request request) async {
+    try {
+      final fileId = request.params['fileId']!;
+      final file = await database.getProcessedFileById(fileId);
+
+      if (file == null) {
+        return shelf.Response.notFound(
+          jsonEncode({'error': 'File not found'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      // Extract title using LLM based on summary
+      final extractedTitle = await _extractTitleFromSummary(file.summary);
+
+      if (extractedTitle != null) {
+        await database.updateFileTitle(fileId, extractedTitle);
+
+        // Broadcast title update to WebSocket clients
+        _broadcastToClients({
+          'type': 'title_updated',
+          'fileId': fileId,
+          'title': extractedTitle,
+        });
+
+        return shelf.Response.ok(
+          jsonEncode({
+            'success': true,
+            'title': extractedTitle,
+            'message': 'Title extracted and updated successfully',
+          }),
+          headers: {'Content-Type': 'application/json'},
+        );
+      } else {
+        return shelf.Response.internalServerError(
+          body: jsonEncode({'error': 'Failed to extract title from summary'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+    } catch (e) {
+      logger.severe('Error extracting title: $e');
+      return shelf.Response.internalServerError(
+        body: jsonEncode({'error': 'Failed to extract title: $e'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
+
+  /// Extract a title from the document summary using simple heuristics
+  Future<String?> _extractTitleFromSummary(String summary) async {
+    try {
+      // Simple title extraction - take the first sentence or up to first period
+      final sentences = summary.split('.');
+      if (sentences.isNotEmpty) {
+        String title = sentences[0].trim();
+
+        // Clean up the title
+        title = title.replaceAll(
+          RegExp(r'^(this|the|a|an)\s+', caseSensitive: false),
+          '',
+        );
+        title = title.replaceAll(RegExp(r'\s+'), ' ');
+
+        // Capitalize first letter
+        if (title.isNotEmpty) {
+          title = title[0].toUpperCase() + title.substring(1);
+        }
+
+        // Limit length
+        if (title.length > 100) {
+          title = title.substring(0, 97) + '...';
+        }
+
+        return title.isNotEmpty ? title : null;
+      }
+
+      return null;
+    } catch (e) {
+      logger.severe('Error extracting title from summary: $e');
+      return null;
+    }
+  }
 }

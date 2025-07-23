@@ -26,7 +26,11 @@ dependencies:
   shelf_static: ^1.1.2
   shelf_web_socket: ^1.0.4
   web_socket_channel: ^2.4.0
+  sqlite3: ^2.4.0
+  drift: ^2.16.0
 
 dev_dependencies:
   lints: ^5.0.0
   test: ^1.24.0
+  drift_dev: ^2.16.0
+  build_runner: ^2.4.7

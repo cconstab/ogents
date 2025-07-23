@@ -42,9 +42,19 @@ at_credentials/
 *.processed.txt
 *.ocr.txt
 
+# Database files
+.ogents_data/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
 # Test artifacts
 test_output/
 temp_test_files/
+test_*.txt
+test_*.dart
+check_database.dart
 
 # IDE
 .vscode/

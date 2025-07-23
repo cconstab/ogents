@@ -29,6 +29,7 @@ class FileAgent {
   late AtClient atClient;
   late String currentAtSign;
   late String llmAtSign;
+  late String webAtSign;
   late String nameSpace;
   late FileProcessor fileProcessor;
   late LLMClient llmClient;
@@ -61,11 +62,13 @@ class FileAgent {
     // Extract configuration
     currentAtSign = parsedArgs['atsign'];
     llmAtSign = parsedArgs['llm-atsign'];
+    webAtSign = parsedArgs['web-atsign'] ?? currentAtSign; // Default to self
     nameSpace = '${parsedArgs['namespace']}.${defaultNameSpace}';
 
     print(chalk.blue('Starting ogents file agent...'));
     print(chalk.blue('Agent atSign: $currentAtSign'));
     print(chalk.blue('LLM atSign: $llmAtSign'));
+    print(chalk.blue('Web Frontend atSign: $webAtSign'));
     print(chalk.blue('Namespace: $nameSpace'));
 
     // Initialize atClient
@@ -113,6 +116,13 @@ class FileAgent {
       abbr: 'l',
       mandatory: true,
       help: 'atSign of the LLM service to send files for summarization',
+    );
+
+    parser.addOption(
+      'web-atsign',
+      abbr: 'w',
+      help:
+          'atSign of the web frontend to send processed files to (defaults to self)',
     );
 
     parser.addOption(
@@ -318,7 +328,8 @@ class FileAgent {
         ..metadata = (Metadata()
           ..isEncrypted = true
           ..isPublic = false
-          ..namespaceAware = true);
+          ..namespaceAware = true
+          ..ttl = 3600000); // 1 hour in milliseconds
 
       final result = await atClient.notificationService.notify(
         NotificationParams.forUpdate(key, value: jsonEncode(summaryData)),
@@ -357,12 +368,13 @@ class FileAgent {
         ..key = 'web_frontend_data'
         ..sharedBy = currentAtSign
         ..sharedWith =
-            currentAtSign // Send to self for web frontend
+            webAtSign // Send to web frontend atSign
         ..namespace = nameSpace
         ..metadata = (Metadata()
           ..isEncrypted = false
           ..isPublic = false
-          ..namespaceAware = true);
+          ..namespaceAware = true
+          ..ttl = 86400000); // 24 hours in milliseconds
 
       final webResult = await atClient.notificationService.notify(
         NotificationParams.forUpdate(webKey, value: jsonEncode(webData)),
@@ -375,7 +387,7 @@ class FileAgent {
 
       logger.info('Web frontend notification sent for file: $filename');
       print(chalk.cyan('🔔 Web frontend notification sent:'));
-      print(chalk.gray('📨 To: $currentAtSign'));
+      print(chalk.gray('📨 To: $webAtSign'));
       print(chalk.gray('🔑 Key: ${webKey.toString()}'));
       print(chalk.gray('📄 Data size: ${jsonEncode(webData).length} chars'));
     } catch (e) {

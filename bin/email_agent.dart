@@ -457,7 +457,8 @@ class EmailMonitor {
         ..metadata = (Metadata()
           ..isEncrypted = true
           ..isPublic = false
-          ..namespaceAware = true);
+          ..namespaceAware = true
+          ..ttl = 3600000); // 1 hour in milliseconds
 
       // Send the notification
       final result = await atClient.notificationService.notify(
