@@ -331,7 +331,7 @@ class EmailMonitor {
     } catch (e) {
       logger.severe('Failed to connect to IMAP server: $e');
       print(chalk.red('❌ Failed to connect to IMAP server: $e'));
-      throw e;
+      rethrow;
     }
   }
 
@@ -384,28 +384,60 @@ class EmailMonitor {
     if (mailClient == null) return;
 
     try {
-      // Fetch recent unread messages using the high-level API
-      final messages = await mailClient!.fetchMessages(count: 20);
+      // First, check for recent messages
+      final unreadMessages = await mailClient!.fetchMessages(count: 20);
+      print(chalk.gray('📬 Found ${unreadMessages.length} unread messages'));
+      
+      bool processedAnyPdfs = false;
 
-      for (final message in messages) {
+      for (final message in unreadMessages) {
         final uid = message.uid;
-        if (uid != null &&
-            !processedEmailUids.contains(uid) &&
-            !message.isSeen) {
-          await _processEmailMessage(message);
+        final subject = message.decodeSubject() ?? 'No Subject';
+        
+        print(chalk.gray('📧 Unread Message UID: $uid, Subject: "$subject"'));
+        
+        if (uid != null && !processedEmailUids.contains(uid)) {
+          print(chalk.blue('🔄 Processing new unread message: $subject'));
+          final foundPdf = await _processEmailMessage(message);
+          if (foundPdf) {
+            processedAnyPdfs = true;
+          }
           processedEmailUids.add(uid);
 
           // Mark as read
           await mailClient!.markSeen(MessageSequence.fromMessage(message));
+        } else if (uid != null && processedEmailUids.contains(uid)) {
+          print(chalk.gray('⏭️ Skipping already processed message: $subject'));
         }
       }
+      
+      // If no unread messages with PDFs found, check recent messages (including read ones)
+      if (!processedAnyPdfs) {
+        print(chalk.gray('� No PDFs in unread messages, checking recent messages...'));
+        final recentMessages = await mailClient!.fetchMessages(count: 10);
+        
+        for (final message in recentMessages) {
+          final uid = message.uid;
+          final subject = message.decodeSubject() ?? 'No Subject';
+          
+          if (uid != null && !processedEmailUids.contains(uid)) {
+            print(chalk.blue('🔄 Processing recent message: $subject'));
+            final foundPdf = await _processEmailMessage(message);
+            if (foundPdf) {
+              processedAnyPdfs = true;
+            }
+            processedEmailUids.add(uid);
+          }
+        }
+      }
+      
     } catch (e) {
       logger.warning('Failed to check emails: $e');
-      print(chalk.yellow('⚠️ Failed to check emails: $e'));
+      print(chalk.red('❌ Failed to check emails: $e'));
     }
   }
 
-  Future<void> _processEmailMessage(MimeMessage message) async {
+  Future<bool> _processEmailMessage(MimeMessage message) async {
     try {
       final subject = message.decodeSubject() ?? 'No Subject';
       final from = message.from?.isNotEmpty == true
@@ -417,50 +449,98 @@ class EmailMonitor {
 
       // Look for PDF attachments by checking all parts
       final allParts = message.allPartsFlat;
+      print(chalk.gray('🔍 Checking ${allParts.length} message parts for attachments'));
 
-      for (final part in allParts) {
+      bool foundPdfAttachment = false;
+      
+      for (int i = 0; i < allParts.length; i++) {
+        final part = allParts[i];
+        final contentType = part.mediaType;
         final contentDisposition = part.getHeaderContentDisposition();
+        final contentTypeStr = contentType.toString().toLowerCase();
+        
+        print(chalk.gray('Part $i: ContentType: $contentTypeStr, Disposition: ${contentDisposition?.disposition}'));
+        
+        // Check multiple ways to detect PDF attachments
+        bool isPdfAttachment = false;
+        String? filename;
+        
+        // Method 1: Check content disposition for attachment with PDF filename
         if (contentDisposition?.disposition == ContentDisposition.attachment) {
-          final filename = contentDisposition?.filename;
+          filename = contentDisposition?.filename;
           if (filename != null && filename.toLowerCase().endsWith('.pdf')) {
-            print(chalk.yellow('📎 Found PDF attachment: $filename'));
+            isPdfAttachment = true;
+            print(chalk.blue('📎 Found PDF attachment via disposition: $filename'));
+          }
+        }
+        
+        // Method 2: Check for inline PDFs or PDFs without proper disposition
+        if (!isPdfAttachment && contentTypeStr.contains('application/pdf')) {
+          filename = contentDisposition?.filename ?? 
+                   part.getHeaderValue('content-type')?.split('name=').lastOrNull?.replaceAll('"', '') ??
+                   'attachment.pdf';
+          isPdfAttachment = true;
+          print(chalk.blue('📎 Found PDF via content-type: $filename'));
+        }
+        
+        // Method 3: Check for base64 encoded PDFs in text parts
+        if (!isPdfAttachment && contentTypeStr.contains('text/plain')) {
+          final content = part.decodeContentText();
+          if (content != null && content.startsWith('%PDF')) {
+            filename = 'embedded.pdf';
+            isPdfAttachment = true;
+            print(chalk.blue('📎 Found embedded PDF in text: $filename'));
+          }
+        }
 
-            final data = part.decodeContentBinary();
-            if (data != null) {
-              final fileSizeMB = data.length / (1024 * 1024);
+        if (isPdfAttachment && filename != null) {
+          foundPdfAttachment = true;
+          print(chalk.yellow('📎 Processing PDF attachment: $filename'));
+
+          final data = part.decodeContentBinary();
+          if (data != null && data.isNotEmpty) {
+            final fileSizeMB = data.length / (1024 * 1024);
+            print(
+              chalk.gray('File size: ${fileSizeMB.toStringAsFixed(1)}MB'),
+            );
+
+            // Check file size - atPlatform has ~10MB limit for notifications
+            const maxSizeBytes = 8 * 1024 * 1024; // 8MB to be safe
+            if (data.length > maxSizeBytes) {
               print(
-                chalk.gray('File size: ${fileSizeMB.toStringAsFixed(1)}MB'),
+                chalk.red(
+                  '❌ PDF attachment too large: ${fileSizeMB.toStringAsFixed(1)}MB (max: 8MB)',
+                ),
               );
-
-              // Check file size - atPlatform has ~10MB limit for notifications
-              const maxSizeBytes = 8 * 1024 * 1024; // 8MB to be safe
-              if (data.length > maxSizeBytes) {
-                print(
-                  chalk.red(
-                    '❌ PDF attachment too large: ${fileSizeMB.toStringAsFixed(1)}MB (max: 8MB)',
-                  ),
-                );
-                print(
-                  chalk.yellow(
-                    '💡 Skipping this attachment - consider smaller PDFs',
-                  ),
-                );
-                continue;
-              }
-
-              final base64Data = base64Encode(data);
-              await _sendPDFToOgents(
-                base64Data,
-                filename,
-                'email:$from:$subject',
+              print(
+                chalk.yellow(
+                  '💡 Skipping this attachment - consider smaller PDFs',
+                ),
               );
+              continue;
             }
+
+            final base64Data = base64Encode(data);
+            await _sendPDFToOgents(
+              base64Data,
+              filename,
+              'email:$from:$subject',
+            );
+          } else {
+            print(chalk.red('❌ Could not decode PDF data for: $filename'));
           }
         }
       }
+      
+      if (!foundPdfAttachment) {
+        print(chalk.yellow('⚠️ No PDF attachments found in email: $subject'));
+      }
+      
+      return foundPdfAttachment;
     } catch (e) {
       logger.severe('Error processing email message: $e');
       print(chalk.red('❌ Error processing email message: $e'));
+      return false;
     }
   }
 
