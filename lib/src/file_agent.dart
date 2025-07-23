@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:at_cli_commons/at_cli_commons.dart';
 import 'package:at_client/at_client.dart';
@@ -213,6 +214,9 @@ class FileAgent {
 
       print(chalk.green('✅ File downloaded: ${downloadedFile.path}'));
 
+      // Read the original file data for web frontend
+      final originalFileData = await downloadedFile.readAsBytes();
+
       // Process the file and get summary
       print(chalk.yellow('🤖 Sending file to LLM for summarization...'));
       final summary = await _summarizeFile(downloadedFile, notification.from);
@@ -232,6 +236,14 @@ class FileAgent {
           fileInfo['filename'],
         );
         print(chalk.green('✅ Summary sent back to ${notification.from}'));
+
+        // Send data to web frontend for dashboard display
+        await _sendWebFrontendNotification(
+          fileInfo['filename'],
+          summary,
+          originalFileData,
+        );
+        print(chalk.green('✅ Data sent to web frontend'));
       } else {
         print(chalk.red('❌ Failed to get summary from LLM'));
       }
@@ -321,6 +333,54 @@ class FileAgent {
     } catch (e) {
       logger.severe('Failed to send summary notification: $e');
       rethrow;
+    }
+  }
+
+  Future<void> _sendWebFrontendNotification(
+    String filename,
+    String summary,
+    Uint8List originalFileData,
+  ) async {
+    try {
+      // Send notification to web frontend for dashboard display
+      final webData = {
+        'type': 'processed_file',
+        'filename': filename,
+        'summary': summary,
+        'fileData': base64Encode(originalFileData),
+        'processedAt': DateTime.now().toIso8601String(),
+        'agent': currentAtSign,
+        'fileSize': originalFileData.length,
+      };
+
+      final webKey = AtKey()
+        ..key = 'web_frontend_data'
+        ..sharedBy = currentAtSign
+        ..sharedWith =
+            currentAtSign // Send to self for web frontend
+        ..namespace = nameSpace
+        ..metadata = (Metadata()
+          ..isEncrypted = false
+          ..isPublic = false
+          ..namespaceAware = true);
+
+      final webResult = await atClient.notificationService.notify(
+        NotificationParams.forUpdate(webKey, value: jsonEncode(webData)),
+        checkForFinalDeliveryStatus: false,
+      );
+
+      if (webResult.atClientException != null) {
+        throw webResult.atClientException!;
+      }
+
+      logger.info('Web frontend notification sent for file: $filename');
+      print(chalk.cyan('🔔 Web frontend notification sent:'));
+      print(chalk.gray('📨 To: $currentAtSign'));
+      print(chalk.gray('🔑 Key: ${webKey.toString()}'));
+      print(chalk.gray('📄 Data size: ${jsonEncode(webData).length} chars'));
+    } catch (e) {
+      logger.severe('Failed to send web frontend notification: $e');
+      // Don't rethrow as this is not critical for the main flow
     }
   }
 }
