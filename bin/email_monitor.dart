@@ -390,7 +390,9 @@ class EmailMonitor {
 
       // Filter for unread messages only
       final unreadMessages = messages.where((msg) => !msg.isSeen).toList();
-      print(chalk.gray('📖 ${unreadMessages.length} unread messages to process'));
+      print(
+        chalk.gray('📖 ${unreadMessages.length} unread messages to process'),
+      );
 
       for (final message in unreadMessages) {
         final uid = message.uid;
@@ -400,13 +402,13 @@ class EmailMonitor {
 
         if (uid != null && !processedEmailUids.contains(uid)) {
           print(chalk.blue('🔄 Processing new unread message: $subject'));
-          
+
           // Process the message and check if PDFs were found
           final foundPdf = await _processEmailMessage(message);
-          
+
           // Always mark as processed to prevent reprocessing
           processedEmailUids.add(uid);
-          
+
           // Mark email as read in the server to prevent future processing
           try {
             await mailClient!.markSeen(MessageSequence.fromMessage(message));
@@ -415,9 +417,13 @@ class EmailMonitor {
             logger.warning('Failed to mark email as read: $e');
             print(chalk.yellow('⚠️ Could not mark email as read: $subject'));
           }
-          
+
           if (foundPdf) {
-            print(chalk.green('📎 Successfully processed PDF attachments from: $subject'));
+            print(
+              chalk.green(
+                '📎 Successfully processed PDF attachments from: $subject',
+              ),
+            );
           }
         } else if (uid != null && processedEmailUids.contains(uid)) {
           print(chalk.gray('⏭️ Skipping already processed message: $subject'));
