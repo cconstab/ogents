@@ -139,13 +139,12 @@ The system consists of four main components:
 1. **File Agent** (`ogents`): Receives file notifications, downloads files, and orchestrates the summarization process
 ## 🏗️ System Architecture
 
-The ogents system consists of five main components that work together:
+The ogents system consists of four main components that work together:
 
 1. **Main Agent** (`ogents.dart`): Core file processing agent with OCR and atPlatform integration
-2. **Email Monitor** (`email_monitor.dart`): Advanced email monitoring with IMAP + directory support  
-3. **Email Agent** (`email_agent.dart`): Legacy IMAP-only email monitoring
-4. **LLM Service** (`llm_service.dart`): AI-powered text analysis with Ollama integration
-5. **File Sender** (`send_file.dart`): Command-line utility for sending files to agents
+2. **Email Monitor** (`email_monitor.dart`): Comprehensive email monitoring with IMAP + directory support  
+3. **LLM Service** (`llm_service.dart`): AI-powered text analysis with Ollama integration
+4. **File Sender** (`send_file.dart`): Command-line utility for sending files to agents
 
 📖 **[Complete System Architecture Guide →](docs/SYSTEM_ARCHITECTURE.md)**
 

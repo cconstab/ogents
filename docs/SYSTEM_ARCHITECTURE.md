@@ -12,7 +12,6 @@ graph TB
     end
     
     subgraph "Monitoring Layer"
-        EMA[email_agent.dart<br/>Direct IMAP Monitoring]
         EMO[email_monitor.dart<br/>Directory + IMAP Monitoring]
     end
     
@@ -146,29 +145,7 @@ dart run bin/email_monitor.dart -a @sender -g @agent -n ogents \
 
 ---
 
-### 3. `email_agent.dart` - Legacy Email Agent
-**Purpose**: Simplified IMAP-only email monitoring (legacy)
-**Location**: `bin/email_agent.dart`
-
-**Functionality**:
-- Direct IMAP connection and PDF extraction
-- Basic email parsing and attachment handling
-- Sends processed PDFs to ogents agent
-- Raw IMAP protocol implementation
-
-**Usage**:
-```bash
-dart run bin/email_agent.dart -a @sender -g @agent \
-  -s imap.gmail.com \
-  -e user@gmail.com \
-  -w app_password
-```
-
-**Note**: This is a legacy component. Use `email_monitor.dart` for new implementations.
-
----
-
-### 4. `llm_service.dart` - LLM Service Provider
+### 3. `llm_service.dart` - LLM Service Provider
 **Purpose**: AI-powered content analysis and summarization service
 **Location**: `bin/llm_service.dart`
 
@@ -203,7 +180,7 @@ dart run bin/llm_service.dart -a @llm_service -n ogents -t simple
 
 ---
 
-### 5. `send_file.dart` - File Sender Utility
+### 4. `send_file.dart` - File Sender Utility
 **Purpose**: Command-line utility for sending files to ogents agents
 **Location**: `bin/send_file.dart`
 
@@ -250,7 +227,7 @@ Email Account → email_monitor.dart → PDF Extraction → atPlatform → ogent
 
 ### 3. IMAP Email Flow
 ```
-IMAP Server → email_agent.dart → PDF Parsing → atPlatform → ogents.dart → Processing → Response
+IMAP Server → email_monitor.dart → PDF Parsing → atPlatform → ogents.dart → Processing → Response
 ```
 
 ## File Processing Capabilities

@@ -4,18 +4,17 @@
 
 ### Fixed Issues:
 1. **StringBuffer conflict**: Fixed import collision between `dart:core` and `at_commons` package
-2. **Regex pattern error**: Corrected malformed regular expression in email_agent.dart  
+2. **Regex pattern error**: Corrected malformed regular expression patterns
 3. **Method call issues**: Fixed `match.group(1)` and StringBuffer length checks
 4. **Import cleanup**: Removed unused imports from ogents.dart
 
 ### Compilation Status:
-- **✅ email_agent.dart**: Compiles successfully (IMAP email monitoring)
-- **✅ email_monitor.dart**: Compiles successfully (Enhanced email monitoring)
+- **✅ email_monitor.dart**: Compiles successfully (Enhanced email monitoring with IMAP + directory support)
 - **✅ llm_service.dart**: Compiles successfully (AI service provider)
 - **✅ ogents.dart**: Compiles successfully (Main file agent)
 - **✅ send_file.dart**: Compiles successfully (File sender utility)
 
-**All 5 binaries now compile without errors!**
+**All 4 binaries now compile without errors!**
 
 ## ✅ **Comprehensive Documentation Completed**
 
@@ -26,7 +25,7 @@
 
 ### Architecture Documentation Features:
 - **System Workflow Diagram**: Visual representation of all components and data flow
-- **Binary Component Guide**: Detailed description of all 5 executables
+- **Binary Component Guide**: Detailed description of all 4 executables
 - **Usage Examples**: Complete setup workflows for each binary
 - **Configuration Options**: Full command-line argument reference
 - **Email Provider Setup**: Gmail, Outlook, Yahoo configuration
@@ -45,7 +44,6 @@
 |--------|---------|---------|---------------|
 | **ogents.dart** | Main file processing agent | ✅ Compiles | ✅ Complete |
 | **email_monitor.dart** | Enhanced email monitoring (IMAP + directory) | ✅ Compiles | ✅ Complete |
-| **email_agent.dart** | Legacy IMAP-only monitoring | ✅ Compiles | ✅ Complete |
 | **llm_service.dart** | AI/LLM service provider | ✅ Compiles | ✅ Complete |
 | **send_file.dart** | File sending utility | ✅ Compiles | ✅ Complete |
 
