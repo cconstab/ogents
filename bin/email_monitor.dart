@@ -384,11 +384,13 @@ class EmailMonitor {
     if (mailClient == null) return;
 
     try {
-      // First, check for recent messages
-      final unreadMessages = await mailClient!.fetchMessages(count: 20);
-      print(chalk.gray('📬 Found ${unreadMessages.length} unread messages'));
+      // Fetch recent messages
+      final messages = await mailClient!.fetchMessages(count: 20);
+      print(chalk.gray('📬 Found ${messages.length} recent messages'));
 
-      bool processedAnyPdfs = false;
+      // Filter for unread messages only
+      final unreadMessages = messages.where((msg) => !msg.isSeen).toList();
+      print(chalk.gray('📖 ${unreadMessages.length} unread messages to process'));
 
       for (final message in unreadMessages) {
         final uid = message.uid;
@@ -398,21 +400,32 @@ class EmailMonitor {
 
         if (uid != null && !processedEmailUids.contains(uid)) {
           print(chalk.blue('🔄 Processing new unread message: $subject'));
+          
+          // Process the message and check if PDFs were found
           final foundPdf = await _processEmailMessage(message);
-          if (foundPdf) {
-            processedAnyPdfs = true;
-          }
+          
+          // Always mark as processed to prevent reprocessing
           processedEmailUids.add(uid);
-
-          // Mark as read
-          await mailClient!.markSeen(MessageSequence.fromMessage(message));
+          
+          // Mark email as read in the server to prevent future processing
+          try {
+            await mailClient!.markSeen(MessageSequence.fromMessage(message));
+            print(chalk.gray('✅ Marked email as read: $subject'));
+          } catch (e) {
+            logger.warning('Failed to mark email as read: $e');
+            print(chalk.yellow('⚠️ Could not mark email as read: $subject'));
+          }
+          
+          if (foundPdf) {
+            print(chalk.green('📎 Successfully processed PDF attachments from: $subject'));
+          }
         } else if (uid != null && processedEmailUids.contains(uid)) {
           print(chalk.gray('⏭️ Skipping already processed message: $subject'));
         }
       }
 
-      // If no unread messages with PDFs found, check recent messages (including read ones)
-      if (!processedAnyPdfs) {
+      // If no unread messages, we're done
+      if (unreadMessages.isEmpty) {
         print(
           chalk.gray(
             '� No PDFs in unread messages, checking recent messages...',
