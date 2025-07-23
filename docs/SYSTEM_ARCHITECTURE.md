@@ -26,6 +26,17 @@ graph TB
         SS[Simple Summarizer<br/>Built-in Rules]
     end
     
+    subgraph "Web Interface"
+        WF[web_frontend.dart<br/>Web Server + API]
+        UI[Web UI<br/>Dashboard & Search]
+        WS[WebSocket<br/>Real-time Updates]
+    end
+    
+    subgraph "Data Layer"
+        DB[(SQLite Database<br/>Drift ORM)]
+        PS[ProcessedFiles Table<br/>Schema v2]
+    end
+    
     subgraph "Communication"
         AT[atPlatform<br/>Secure Messaging]
         SF[send_file.dart<br/>File Sender Utility]
@@ -38,9 +49,8 @@ graph TB
     end
     
     %% Data Flow
-    EM --> EMA
+    EM --> EMO
     ED --> EMO
-    EMA --> AT
     EMO --> AT
     SF --> AT
     AT --> FA
@@ -52,22 +62,29 @@ graph TB
     LLM --> OL
     LLM --> SS
     LLM --> AT
-    AT --> EMA
-    AT --> EMO
-    AT --> SF
+    AT --> WF
+    WF --> DB
+    DB --> PS
+    WF --> UI
+    WF --> WS
+    UI --> WS
     
     %% Styling
     classDef email fill:#e1f5fe
     classDef monitor fill:#f3e5f5
     classDef core fill:#e8f5e8
     classDef ai fill:#fff3e0
+    classDef web fill:#e8eaf6
+    classDef data fill:#f1f8e9
     classDef comm fill:#fce4ec
-    classDef external fill:#f1f8e9
+    classDef external fill:#fff8e1
     
     class EM,ED email
-    class EMA,EMO monitor
+    class EMO monitor
     class FA,FP core
     class LLM,OL,SS ai
+    class WF,UI,WS web
+    class DB,PS data
     class AT,SF comm
     class TS,IM,GS external
 ```
@@ -213,6 +230,91 @@ dart run bin/send_file.dart -a @sender -g @agent -u https://example.com/doc.pdf 
 
 ---
 
+### 5. `web_frontend.dart` - Web Dashboard & API Server
+**Purpose**: Web-based dashboard for viewing and managing processed files
+**Location**: `bin/web_frontend.dart`
+
+**Functionality**:
+- **Web Dashboard**: Modern UI for viewing processed documents
+- **Real-time Updates**: WebSocket connections for live file notifications
+- **Search & Filter**: Full-text search across document summaries and titles
+- **Calendar View**: Timeline visualization of processed files
+- **File Management**: Download originals, delete files, bulk cleanup
+- **RESTful API**: Complete REST API for programmatic access
+- **Auto-title Extraction**: AI-powered title generation from summaries
+- **SQLite Database**: Persistent storage using Drift ORM
+
+**Usage**:
+```bash
+dart run bin/web_frontend.dart -a @web_frontend -n ogents -p 8090
+```
+
+**Key Arguments**:
+- `-a, --atsign`: Web frontend atSign
+- `-n, --namespace`: Communication namespace
+- `-p, --port`: Web server port (default: 8090)
+
+**API Endpoints**:
+- `GET /api/files` - List all processed files
+- `GET /api/files/{id}` - Get specific file details
+- `GET /api/files/{id}/download` - Download original file
+- `GET /api/search?q={query}` - Search files by content
+- `GET /api/calendar` - Get calendar view data
+- `GET /api/stats` - System statistics
+- `DELETE /api/files/{id}` - Delete specific file
+- `DELETE /api/files/cleanup/{days}` - Cleanup files older than X days
+- `POST /api/files/{id}/extract-title` - Extract title from summary
+
+**Web Interface Features**:
+- 📊 **Dashboard**: Overview of recent files and statistics
+- 🔍 **Search**: Full-text search with highlighting
+- 📅 **Calendar**: Visual timeline of document processing
+- 📱 **Responsive**: Works on desktop, tablet, and mobile
+- 🔄 **Real-time**: Live updates via WebSocket
+- 📁 **File Management**: View, download, delete operations
+
+**Dependencies**: Drift database, Shelf web server, atPlatform client
+
+---
+
+## Data Layer Architecture
+
+### Database Schema (Drift ORM)
+**Location**: `lib/src/database_service.dart`
+
+**ProcessedFiles Table (Schema v2)**:
+```sql
+CREATE TABLE processed_files (
+    id TEXT PRIMARY KEY,              -- UUID for each processed file
+    filename TEXT NOT NULL,           -- Original filename
+    original_data BLOB,               -- Binary file data (up to 8MB)
+    summary TEXT NOT NULL,            -- AI-generated summary
+    title TEXT,                       -- AI-extracted document title
+    processed_at DATETIME NOT NULL,   -- Processing timestamp
+    sender TEXT NOT NULL,             -- atSign of file sender
+    file_size INTEGER,                -- File size in bytes
+    file_type TEXT,                   -- Human-readable file type
+    ocr_text TEXT,                    -- Raw OCR text (if applicable)
+    agent_at_sign TEXT                -- Processing agent atSign
+);
+```
+
+**Database Features**:
+- **SQLite Backend**: Local file-based storage
+- **Drift ORM**: Type-safe database operations
+- **Auto-migration**: Schema versioning and upgrades
+- **Full-text Search**: Search across summaries, titles, and OCR text
+- **Date Indexing**: Efficient date-based queries for calendar view
+- **Automatic Cleanup**: Configurable retention policies
+
+**Generated Code**:
+```bash
+# Required for database functionality
+dart run build_runner build
+```
+
+---
+
 ## System Workflow
 
 ### 1. Standard File Processing Flow
@@ -225,9 +327,19 @@ User → send_file.dart → atPlatform → ogents.dart → File Processor → LL
 Email Account → email_monitor.dart → PDF Extraction → atPlatform → ogents.dart → OCR Processing → LLM Analysis → Summary
 ```
 
-### 3. IMAP Email Flow
+### 3. Web Frontend Integration Flow
 ```
-IMAP Server → email_monitor.dart → PDF Parsing → atPlatform → ogents.dart → Processing → Response
+File Processing → web_frontend_data notification → web_frontend.dart → Database Storage → WebSocket Broadcast → Web UI Update
+```
+
+### 4. Complete End-to-End Flow
+```
+Email/File → Monitor/Sender → atPlatform → ogents.dart → Processing → LLM Analysis → web_frontend.dart → Database → Web Dashboard
+```
+
+### 5. IMAP Email Flow
+```
+IMAP Server → email_monitor.dart → PDF Parsing → atPlatform → ogents.dart → Processing → Response → Web Frontend → Database
 ```
 
 ## File Processing Capabilities
@@ -339,27 +451,142 @@ Sample files for testing are in `tools/testing/test_data/`:
 
 ### Resource Requirements
 - **Memory**: 256MB minimum for basic operation
-- **Storage**: Temporary space for file processing
+- **Storage**: Temporary space for file processing + SQLite database
 - **Network**: Stable connection for atPlatform communication
 - **CPU**: OCR processing is CPU-intensive for large PDFs
+
+---
+
+## atPlatform Notification System
+
+### Notification Types and Flow
+
+**1. `file_share` Notifications** (External → ogents.dart)
+- **Source**: send_file.dart, email_monitor.dart
+- **Target**: ogents.dart (main file agent)
+- **Purpose**: Request file processing
+- **Content**: File data, metadata, processing instructions
+
+**2. `file_summary` Notifications** (ogents.dart → Original Sender)
+- **Source**: ogents.dart
+- **Target**: Original file sender
+- **Purpose**: Return processing results to sender
+- **Content**: Summary, statistics, processing status
+
+**3. `web_frontend_data` Notifications** (ogents.dart → web_frontend.dart)
+- **Source**: ogents.dart (main file agent)
+- **Target**: web_frontend.dart
+- **Purpose**: Store processed files in web database
+- **Content**: Processed file data, summary, metadata for web dashboard
+
+### Notification Namespace Structure
+```
+{notification_type}.{namespace}.{atsign}
+```
+
+**Examples**:
+- `file_share.ogents.@agent` - File processing request
+- `file_summary.ogents.@sender` - Processing result
+- `web_frontend_data.ogents.@web_frontend` - Web dashboard data
+
+### Component Communication Matrix
+
+| From → To | Notification Type | Purpose |
+|-----------|------------------|---------|
+| send_file.dart → ogents.dart | `file_share` | File processing request |
+| email_monitor.dart → ogents.dart | `file_share` | Email attachment processing |
+| ogents.dart → Original Sender | `file_summary` | Processing results |
+| ogents.dart → web_frontend.dart | `web_frontend_data` | Database storage |
+| web_frontend.dart ↔ Web UI | WebSocket | Real-time updates |
+
+---
 
 ## Integration Examples
 
 ### Complete System Setup
 ```bash
-# 1. Start LLM Service
+# 1. Generate database code (REQUIRED!)
+dart run build_runner build
+
+# 2. Start LLM Service
 dart run bin/llm_service.dart -a @llm -n ogents -t ollama \
   --ollama-url http://localhost:11434 --ollama-model llama3.2
 
-# 2. Start File Agent
+# 3. Start File Agent
 dart run bin/ogents.dart -a @agent -l @llm -n ogents
 
-# 3. Start Email Monitoring
+# 4. Start Web Frontend (NEW!)
+dart run bin/web_frontend.dart -a @web_frontend -n ogents -p 8090
+
+# 5. Start Email Monitoring
 dart run bin/email_monitor.dart -a @sender -g @agent -n ogents \
   --imap-server imap.gmail.com --email user@gmail.com --password app_pass --ssl
 
-# 4. Send Test File
+# 6. Send Test File
 dart run bin/send_file.dart -a @user -g @agent -f document.pdf -n ogents
+
+# 7. View Results
+# Open http://localhost:8090 in your browser
 ```
 
-This creates a complete automated document processing pipeline with email monitoring, OCR capabilities, and AI-powered summarization.
+### Web-Only Setup (File Processing + Dashboard)
+```bash
+# 1. Generate database code
+dart run build_runner build
+
+# 2. Start core services
+dart run bin/llm_service.dart -a @llm -n ogents -t simple &
+dart run bin/ogents.dart -a @agent -l @llm -n ogents &
+dart run bin/web_frontend.dart -a @web_frontend -n ogents -p 8080 &
+
+# 3. Send files via command line
+dart run bin/send_file.dart -a @user -g @agent -f document.pdf -n ogents
+
+# 4. View dashboard at http://localhost:8080
+```
+
+### Development Setup with Hot Reload
+```bash
+# Terminal 1: Database generation (run when schema changes)
+dart run build_runner watch
+
+# Terminal 2: LLM Service
+dart run bin/llm_service.dart -a @llm -n ogents -t simple
+
+# Terminal 3: File Agent with verbose logging  
+dart run bin/ogents.dart -a @agent -l @llm -n ogents -v
+
+# Terminal 4: Web Frontend with debug
+dart run bin/web_frontend.dart -a @web_frontend -n ogents -p 8090 -v
+
+# Terminal 5: Test file sending
+dart run bin/send_file.dart -a @user -g @agent -f test.pdf -n ogents
+```
+
+This creates a complete automated document processing pipeline with email monitoring, OCR capabilities, AI-powered summarization, and a modern web dashboard for viewing and managing processed documents.
+
+### Key System Features
+
+**🔄 End-to-End Processing**:
+- Email attachments automatically processed
+- Files stored in SQLite database 
+- Real-time web dashboard updates
+- Full-text search capabilities
+
+**🚀 Modern Architecture**:
+- Microservices design with clear separation
+- Event-driven communication via atPlatform
+- RESTful API for integration
+- WebSocket for real-time updates
+
+**🔒 Security & Privacy**:
+- End-to-end encryption via atPlatform
+- Local data storage (no cloud dependency)
+- Decentralized peer-to-peer architecture
+- User-controlled data retention policies
+
+**📊 Business Intelligence**:
+- Document timeline visualization
+- Processing statistics and analytics
+- AI-powered title extraction
+- Advanced search and filtering
