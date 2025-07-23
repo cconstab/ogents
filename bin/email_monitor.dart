@@ -439,10 +439,7 @@ class EmailMonitor {
 
           if (uid != null && !processedEmailUids.contains(uid)) {
             print(chalk.blue('🔄 Processing recent message: $subject'));
-            final foundPdf = await _processEmailMessage(message);
-            if (foundPdf) {
-              processedAnyPdfs = true;
-            }
+            await _processEmailMessage(message);
             processedEmailUids.add(uid);
           }
         }
